@@ -2,8 +2,8 @@ name: Laghaim Daily Ranking & XP Scraper
 
 on:
   schedule:
-    # Runs automatically every day at 04:00 UTC
-    - cron: '0 4 * * *'
+    # Runs at 23:15 UTC (00:15 CET Winter / 01:15 CEST Summer)
+    - cron: '15 23 * * *'
   
   # Allows manual execution anytime from the GitHub "Actions" tab
   workflow_dispatch:
