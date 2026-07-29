@@ -813,9 +813,13 @@
             }
         };
 
-        // AUTO-FETCH DATA ON PAGE LOAD
+        // AUTO-FETCH DATA ON PAGE LOAD (Attempts output/data.json first, then fallback to data.json)
         window.addEventListener('DOMContentLoaded', () => {
-            fetch('data.json')
+            fetch('output/data.json')
+                .then(response => {
+                    if (!response.ok) return fetch('data.json');
+                    return response;
+                })
                 .then(response => {
                     if (!response.ok) throw new Error('data.json not found on web server');
                     return response.json();
