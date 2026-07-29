@@ -1,11 +1,13 @@
 """
-Laghaim Original Rankings & Daily XP Scraper (Web Dashboard Ready)
+Laghaim Original Rankings & Daily XP Scraper (Web Dashboard & GitHub Actions Ready)
 Scrapes rankings and daily XP, maintains 7-day rolling XP history,
-calculates snapshot deltas, and outputs both data.json and LaghaimRankings.xlsx.
+calculates snapshot deltas from existing data.json or Excel,
+and outputs both output/data.json and output/LaghaimRankings.xlsx.
 """
 
 from datetime import datetime, timedelta
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -25,7 +27,8 @@ from playwright.sync_api import TimeoutError, sync_playwright
 URL = "https://www.laghaim-original.com/ranking.xhtml"
 REPORT_URL = "https://www.laghaim-original.com/report_ranking.xhtml"
 
-HEADLESS = False
+# Auto-detect CI environment (GitHub Actions) or force Headless mode
+HEADLESS = os.getenv("CI", "true").lower() == "true" or True
 RETRY_COUNT = 3
 
 OUTPUT_DIR = Path("output")
@@ -36,49 +39,19 @@ JSON_FILE = OUTPUT_DIR / "data.json"
 
 
 # ==========================================================
-# FILE LOCK SAFEGUARDS
+# FILE LOCK SAFEGUARDS (CI Compatible)
 # ==========================================================
 
 def check_file_lock(filepath: Path) -> None:
-    """Pre-flight check: Verifies if the target Excel file is locked."""
-    if not filepath.exists():
+    """Pre-flight check: Verifies if target Excel file is locked locally."""
+    if not filepath.exists() or os.getenv("CI"):
         return
 
-    while True:
-        try:
-            with open(filepath, "r+"):
-                break
-        except IOError:
-            print(f"\n[WARNING] Cannot access '{filepath.name}' — open in Excel?")
-            response = input("Close the file and press ENTER to continue (or 'q' to quit): ").strip().lower()
-            if response == 'q':
-                sys.exit(0)
-
-
-def safe_save_writer(writer: pd.ExcelWriter, filepath: Path) -> None:
-    """Post-scrape safeguard for Pandas ExcelWriter."""
-    while True:
-        try:
-            writer.close()
-            break
-        except PermissionError:
-            print(f"\n[ERROR] Permission denied: Unable to save to '{filepath.name}'.")
-            response = input("Please close Excel and press ENTER to try saving again: ").strip().lower()
-            if response == 'q':
-                sys.exit(1)
-
-
-def safe_save_workbook(wb, filepath: Path) -> None:
-    """Post-formatting safeguard for OpenPyXL workbook."""
-    while True:
-        try:
-            wb.save(filepath)
-            break
-        except PermissionError:
-            print(f"\n[ERROR] Unable to save workbook formatting to '{filepath.name}'.")
-            response = input("Please close Excel and press ENTER to try saving again: ").strip().lower()
-            if response == 'q':
-                sys.exit(1)
+    try:
+        with open(filepath, "r+"):
+            pass
+    except IOError:
+        print(f"[WARNING] Cannot access '{filepath.name}' — file may be open locally.")
 
 
 # ==========================================================
@@ -172,14 +145,42 @@ def scrape_daily_xp() -> pd.DataFrame:
     return pd.DataFrame(players)
 
 
-def load_previous_history() -> Optional[pd.DataFrame]:
-    """Loads previous snapshot from Rankings_Old sheet."""
-    if not EXCEL_FILE.exists():
-        return None
-    try:
-        return pd.read_excel(EXCEL_FILE, sheet_name="Rankings_Old")
-    except Exception:
-        return None
+# ==========================================================
+# STATE & HISTORY MEMORY RECOVERY (JSON + Excel)
+# ==========================================================
+
+def load_previous_history() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """
+    Loads previous snapshot and 7-day XP history.
+    Checks Excel first; if missing (like in CI/GitHub Actions), recovers from data.json!
+    """
+    prev_rankings = None
+    prev_xp_history = None
+
+    # Option A: Load from local Excel if available
+    if EXCEL_FILE.exists():
+        try:
+            prev_rankings = pd.read_excel(EXCEL_FILE, sheet_name="Rankings")
+            prev_xp_history = pd.read_excel(EXCEL_FILE, sheet_name="XP History")
+            print("[INFO] Recovered previous snapshot state from LaghaimRankings.xlsx")
+            return prev_rankings, prev_xp_history
+        except Exception as e:
+            print(f"[WARNING] Could not read Excel history: {e}")
+
+    # Option B: Fallback to existing output/data.json (Crucial for GitHub Actions)
+    if JSON_FILE.exists():
+        try:
+            with open(JSON_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "rankings" in data and data["rankings"]:
+                    prev_rankings = pd.DataFrame(data["rankings"])
+                if "xp_history" in data and data["xp_history"]:
+                    prev_xp_history = pd.DataFrame(data["xp_history"])
+            print("[INFO] Recovered previous snapshot state from output/data.json")
+        except Exception as e:
+            print(f"[WARNING] Could not read JSON history: {e}")
+
+    return prev_rankings, prev_xp_history
 
 
 def format_change(value) -> str:
@@ -196,11 +197,10 @@ def format_change(value) -> str:
 
 def create_changes(
     current: pd.DataFrame, previous: Optional[pd.DataFrame]
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> pd.DataFrame:
     """Compares current rankings against previous snapshots."""
     if previous is None or previous.empty:
-        empty = pd.DataFrame()
-        return empty, empty, empty, empty
+        return pd.DataFrame()
 
     comparison = current.merge(
         previous,
@@ -209,9 +209,6 @@ def create_changes(
         suffixes=("", "_Previous"),
         indicator=True,
     )
-
-    new_players = comparison[comparison["_merge"] == "left_only"][["Name", "Rank"]]
-    removed_players = comparison[comparison["_merge"] == "right_only"][["Name", "Rank_Previous"]]
 
     changes = comparison[comparison["_merge"].isin(["both", "left_only"])].copy()
 
@@ -225,11 +222,7 @@ def create_changes(
     changes["Level_Previous"] = changes["Level_Previous"].fillna("-")
     changes["Guild_Previous"] = changes["Guild_Previous"].fillna("")
 
-    guild_changes = comparison[
-        (comparison["_merge"] == "both") & (comparison["Guild"] != comparison["Guild_Previous"])
-    ][["Name", "Guild_Previous", "Guild"]]
-
-    changes = changes[[
+    cols_to_keep = [
         "Name",
         "Rank",
         "Rank_Previous",
@@ -239,9 +232,15 @@ def create_changes(
         "Level Movement",
         "Guild",
         "Guild_Previous",
-    ]].sort_values("Rank")
+    ]
+    
+    # Ensure all columns exist
+    for col in cols_to_keep:
+        if col not in changes.columns:
+            changes[col] = ""
 
-    return changes, new_players, removed_players, guild_changes
+    changes = changes[cols_to_keep].sort_values("Rank")
+    return changes
 
 
 # ==========================================================
@@ -316,17 +315,15 @@ if __name__ == "__main__":
     df.drop_duplicates(subset=["Name"], inplace=True)
     df.sort_values("Rank", inplace=True)
 
-    # 4. Prepare Daily XP & 7-Day Rolling History
+    # 4. Recover Previous State (From Excel OR data.json)
+    previous_rankings, old_xp_history = load_previous_history()
+
+    # 5. Prepare Daily XP & 7-Day Rolling History
     daily_xp["Daily XP"] = daily_xp["Daily XP"].fillna(0).astype(int)
     xp_history_today = daily_xp[["Date", "Name", "Daily XP"]].copy()
 
-    if EXCEL_FILE.exists():
-        try:
-            old_xp_history = pd.read_excel(EXCEL_FILE, sheet_name="XP History")
-        except Exception:
-            old_xp_history = pd.DataFrame()
-    else:
-        old_xp_history = pd.DataFrame()
+    if old_xp_history is None or old_xp_history.empty:
+        old_xp_history = pd.DataFrame(columns=["Date", "Name", "Daily XP"])
 
     xp_history = pd.concat([old_xp_history, xp_history_today], ignore_index=True)
     xp_history = xp_history.drop_duplicates(subset=["Date", "Name"], keep="last")
@@ -337,7 +334,7 @@ if __name__ == "__main__":
     max_date = xp_history["Date"].max()
     xp_history = xp_history[xp_history["Date"] >= (max_date - timedelta(days=6))]
 
-    # Calculate 7-Day Average (excluding active 0 XP days)
+    # Calculate 7-Day Average
     xp_average = (
         xp_history[xp_history["Daily XP"] > 0]
         .groupby("Name")["Daily XP"]
@@ -349,30 +346,18 @@ if __name__ == "__main__":
 
     xp_history["Date"] = xp_history["Date"].dt.strftime("%Y-%m-%d")
 
-    # 5. Merge XP Data into Main Dataset
+    # 6. Merge XP Data into Main Dataset
     df = df.merge(daily_xp[["Name", "Daily XP"]], on="Name", how="left")
     df["Daily XP"] = df["Daily XP"].fillna(0).astype(int)
 
     df = df.merge(xp_average, on="Name", how="left")
     df["Average Daily XP"] = df["Average Daily XP"].fillna(0).astype(int)
 
-    # 6. Generate Deltas
-    previous_rankings = load_previous_history()
-    changes, new_players, removed_players, guild_changes = create_changes(
-        df, previous_rankings
-    )
-
-    # Preserve Prior Baseline
-    if EXCEL_FILE.exists():
-        try:
-            old_rankings = pd.read_excel(EXCEL_FILE, sheet_name="Rankings")
-        except Exception:
-            old_rankings = pd.DataFrame()
-    else:
-        old_rankings = pd.DataFrame()
+    # 7. Generate Deltas
+    changes = create_changes(df, previous_rankings)
 
     # ==========================================================
-    # EXPORT DATA.JSON (For Web Dashboard)
+    # EXPORT DATA.JSON (Primary Database for Web Dashboard & CI)
     # ==========================================================
     web_export = {
         "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -387,35 +372,33 @@ if __name__ == "__main__":
     print(f"\n[OK] Output exported to JSON: {JSON_FILE}")
 
     # ==========================================================
-    # EXPORT RAW EXCEL FILE (For Local Backup/Reference)
+    # EXPORT RAW EXCEL FILE (Local Reference/Backup)
     # ==========================================================
-    writer = pd.ExcelWriter(EXCEL_FILE, engine="openpyxl")
+    try:
+        writer = pd.ExcelWriter(EXCEL_FILE, engine="openpyxl")
+        df.to_excel(writer, sheet_name="Rankings", index=False)
+        xp_history.to_excel(writer, sheet_name="XP History", index=False)
+        if not changes.empty:
+            changes.to_excel(writer, sheet_name="Changes", index=False)
+        writer.close()
 
-    df.to_excel(writer, sheet_name="Rankings", index=False)
-    xp_history.to_excel(writer, sheet_name="XP History", index=False)
-    changes.to_excel(writer, sheet_name="Changes", index=False)
-
-    if not old_rankings.empty:
-        old_rankings.to_excel(writer, sheet_name="Rankings_Old", index=False)
-
-    safe_save_writer(writer, EXCEL_FILE)
-
-    # Clean OpenPyXL auto-formatting for the 4 backup sheets
-    wb = load_workbook(EXCEL_FILE)
-    for ws in wb.worksheets:
-        ws.freeze_panes = "A2"
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-        ws.auto_filter.ref = ws.dimensions
-        for column_cells in ws.columns:
-            length = max(
-                len(str(cell.value)) if cell.value is not None else 0
-                for cell in column_cells
-            )
-            col_letter = get_column_letter(column_cells[0].column)
-            ws.column_dimensions[col_letter].width = max(length + 3, 10)
-
-    safe_save_workbook(wb, EXCEL_FILE)
+        wb = load_workbook(EXCEL_FILE)
+        for ws in wb.worksheets:
+            ws.freeze_panes = "A2"
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+            ws.auto_filter.ref = ws.dimensions
+            for column_cells in ws.columns:
+                length = max(
+                    len(str(cell.value)) if cell.value is not None else 0
+                    for cell in column_cells
+                )
+                col_letter = get_column_letter(column_cells[0].column)
+                ws.column_dimensions[col_letter].width = max(length + 3, 10)
+        wb.save(EXCEL_FILE)
+        print(f"[OK] Backup saved to Excel: {EXCEL_FILE}")
+    except Exception as e:
+        print(f"[NOTE] Skipped Excel export formatting: {e}")
 
     print("==========================")
     print("Scrape & Export Completed!")
