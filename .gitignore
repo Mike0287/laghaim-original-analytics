@@ -1,0 +1,21 @@
+# Ignore local history folder completely
+History/
+
+# Ignore local batch files
+*.bat
+
+# Ignore Excel outputs and temporary backup files everywhere
+*.xlsx
+~$*.xlsx
+output/*.xlsx
+
+# Ignore Python virtual environments and caches
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Ignore Playwright browser downloads and OS files
+.playwright/
+.DS_Store
+Thumbs.db

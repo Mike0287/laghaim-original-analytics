@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laghaim Original Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .sort-header { cursor: pointer; user-select: none; }
+        .sort-header:hover { color: #f59e0b; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .filter-chip { transition: all 0.2s ease; cursor: pointer; }
+        input:checked + .filter-chip { background-color: #f59e0b; color: #0f172a; border-color: #f59e0b; }
+        
+        .excel-filter-popover {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 50;
+            min-width: 200px;
+            max-width: 280px;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            display: none;
+            font-weight: normal;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .excel-filter-popover.active { display: block; }
+        .excel-filter-popover.popover-right { left: auto; right: 0; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans p-4 md:p-6" onclick="closeAllExcelFilters(event)">
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Header Bar & File Loader -->
+        <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/60 shadow-xl">
+            <div>
+                <h1 class="text-3xl font-extrabold text-amber-400 tracking-tight">Laghaim Analytics</h1>
+                <p class="text-slate-400 text-sm mt-1 font-medium" id="last-updated">Status: Checking server for data.json...</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center gap-4">
+                <label for="json-input" class="cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-amber-500/20 active:scale-95">
+                    📁 Load local data.json
+                </label>
+                <input type="file" id="json-input" accept=".json" class="hidden">
+            </div>
+        </header>
+
+        <!-- Drop Zone Prompt (Shown when auto-load isn't available) -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-2xl p-12 text-center transition-all bg-slate-800/30">
+            <p class="text-slate-300 font-medium">Attempting to load <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">data.json</code> automatically...</p>
+            <p class="text-xs text-slate-500 mt-2">Or drag & drop a local <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">data.json</code> file here</p>
+        </div>
+
+        <!-- Main Dashboard Container -->
+        <main id="dashboard" class="hidden space-y-6">
+            <div class="flex border-b border-slate-800 space-x-6 overflow-x-auto">
+                <button onclick="switchTab('rankings-tab')" id="btn-rankings-tab" class="tab-btn py-3 px-2 font-bold text-amber-400 border-b-2 border-amber-400 focus:outline-none transition whitespace-nowrap">Rankings & XP</button>
+                <button onclick="switchTab('changes-tab')" id="btn-changes-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Rank & Guild Movement</button>
+                <button onclick="switchTab('class-tab')" id="btn-class-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Class Statistics</button>
+                <button onclick="switchTab('guilds-tab')" id="btn-guilds-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Guild Statistics</button>
+            </div>
+
+            <!-- TAB 1: RANKINGS & XP -->
+            <div id="rankings-tab" class="tab-content space-y-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider" id="label-players">Total Players</span>
+                        <div class="text-3xl font-extrabold text-white mt-1" id="stat-players">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider" id="label-max-level">Highest Level</span>
+                        <div class="text-3xl font-extrabold text-amber-400 mt-1" id="stat-max-level">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Active Guilds</span>
+                        <div class="text-3xl font-extrabold text-emerald-400 mt-1" id="stat-guilds">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider" id="label-daily-xp">Daily Server XP</span>
+                        <div class="text-3xl font-extrabold text-cyan-400 mt-1" id="stat-daily-xp">0</div>
+                    </div>
+                </div>
+
+                <div id="active-filter-banner" class="hidden bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-xl flex justify-between items-center text-sm">
+                    <span class="font-medium">Active Filters Applied (<span id="active-filter-count">0</span> columns)</span>
+                    <button onclick="clearAllRankingsFilters()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs transition shadow-sm">Reset All Filters ✕</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md"><div class="chart-container"><canvas id="raceChart"></canvas></div></div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md"><div class="chart-container"><canvas id="xpChart"></canvas></div></div>
+                </div>
+
+                <div class="bg-slate-800/60 rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden">
+                    <div class="p-5 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-200">Current Player Snapshot</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Click any player, race, or guild name for summary modals</p>
+                        </div>
+                        <button onclick="clearAllRankingsFilters()" class="text-xs font-bold text-slate-400 hover:text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg transition">Clear All Column Filters</button>
+                    </div>
+                    <div class="overflow-auto max-h-[600px] relative">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="sticky top-0 z-20 bg-slate-900 uppercase text-xs font-bold text-slate-400 border-b border-slate-700/50 tracking-wider shadow-md">
+                                <tr>
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortTable('Rank')" class="sort-header flex-1">Rank <span id="sort-Rank">▲</span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Rank', event)" id="filter-btn-rankings-Rank" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Rank">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Rank" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Filter Rank</div>
+                                            <input type="text" id="excel-search-rankings-Rank" placeholder="Search Rank..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('rankings', 'Rank')">
+                                            <div id="excel-list-rankings-Rank" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Rank')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Rank')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortTable('Name')" class="sort-header flex-1">Name <span id="sort-Name"></span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Name', event)" id="filter-btn-rankings-Name" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Name">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Name" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Name</div>
+                                            <input type="text" id="excel-search-rankings-Name" placeholder="Type player name..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Name')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Name')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortTable('Level')" class="sort-header flex-1">Level <span id="sort-Level"></span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Level', event)" id="filter-btn-rankings-Level" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Level">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Level" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Filter Level</div>
+                                            <input type="text" id="excel-search-rankings-Level" placeholder="Search level..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('rankings', 'Level')">
+                                            <div id="excel-list-rankings-Level" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Level')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Level')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortTable('Race')" class="sort-header flex-1">Race <span id="sort-Race"></span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Race', event)" id="filter-btn-rankings-Race" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Race">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Race" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Race</span>
+                                                <button onclick="toggleSelectAllExcel('rankings', 'Race')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-rankings-Race" placeholder="Search race..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('rankings', 'Race')">
+                                            <div id="excel-list-rankings-Race" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Race')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Race')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortTable('Guild')" class="sort-header flex-1">Guild <span id="sort-Guild"></span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Guild', event)" id="filter-btn-rankings-Guild" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Guild">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Guild" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Guild</span>
+                                                <button onclick="toggleSelectAllExcel('rankings', 'Guild')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-rankings-Guild" placeholder="Search guild..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('rankings', 'Guild')">
+                                            <div id="excel-list-rankings-Guild" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Guild')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Guild')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortTable('Daily XP')" class="sort-header">Daily XP <span id="sort-Daily XP"></span></span>
+                                            <button onclick="toggleExcelFilter('rankings', 'Daily XP', event)" id="filter-btn-rankings-Daily XP" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Daily XP">🔻</button>
+                                        </div>
+                                        <div id="popover-rankings-Daily XP" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Daily XP</div>
+                                            <input type="number" id="excel-search-rankings-Daily XP" placeholder="Min XP value..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('rankings', 'Daily XP')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('rankings', 'Daily XP')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="rankings-table-body" class="divide-y divide-slate-700/30"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: RANK & GUILD MOVEMENT -->
+            <div id="changes-tab" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50">
+                        <h3 class="text-xs uppercase font-bold text-emerald-400 tracking-wider">Top Rank Riser</h3>
+                        <div class="mt-2 text-xl font-bold text-white cursor-pointer hover:text-amber-400 transition" id="top-riser-name" onclick="openCharacterModalFromElement('top-riser-name')">-</div>
+                        <div class="text-sm text-emerald-400 font-semibold" id="top-riser-val">0 ranks climbed</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50">
+                        <h3 class="text-xs uppercase font-bold text-amber-400 tracking-wider">Top Level Gainers</h3>
+                        <div class="mt-2 text-xl font-bold text-white cursor-pointer hover:text-amber-400 transition" id="top-leveler-name" onclick="openCharacterModalFromElement('top-leveler-name')">-</div>
+                        <div class="text-sm text-amber-400 font-semibold" id="top-leveler-val">0 levels gained</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50">
+                        <h3 class="text-xs uppercase font-bold text-cyan-400 tracking-wider">Guild Transfers</h3>
+                        <div class="mt-2 text-3xl font-extrabold text-white" id="guild-transfers-count">0</div>
+                        <div class="text-xs text-slate-400 mt-1">Players who changed guilds</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 flex flex-col md:flex-row justify-between items-center gap-4 shadow-md">
+                    <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                        <span class="text-xs uppercase font-bold text-slate-400 tracking-wider whitespace-nowrap">Filter Activity:</span>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-rank-shift" onchange="applyChangesFiltersAndSort()" class="hidden">
+                            <span class="filter-chip text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/80 text-slate-300 font-semibold hover:border-amber-500/50">Rank Changed</span>
+                        </label>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-level-shift" onchange="applyChangesFiltersAndSort()" class="hidden">
+                            <span class="filter-chip text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/80 text-slate-300 font-semibold hover:border-amber-500/50">Level Changed</span>
+                        </label>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-guild-shift" onchange="applyChangesFiltersAndSort()" class="hidden">
+                            <span class="filter-chip text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/80 text-slate-300 font-semibold hover:border-amber-500/50">Guild Changed</span>
+                        </label>
+                        <button onclick="clearActivityFilters()" class="text-xs text-slate-400 hover:text-amber-400 underline font-medium ml-1 whitespace-nowrap">Reset Shifts</button>
+                    </div>
+                    <button onclick="clearAllChangesFilters()" class="text-xs font-bold text-slate-400 hover:text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg transition">Clear All Column Filters</button>
+                </div>
+
+                <div class="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl">
+                    <div class="overflow-auto max-h-[600px] relative">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="sticky top-0 z-20 bg-slate-900 uppercase text-xs font-bold text-slate-400 border-b border-slate-700/50 tracking-wider shadow-md">
+                                <tr>
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Rank')" class="sort-header flex-1">Rank <span id="sort-changes-Rank"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Rank', event)" id="filter-btn-changes-Rank" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Rank">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Rank" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Filter Rank</div>
+                                            <input type="text" id="excel-search-changes-Rank" placeholder="Search rank..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('changes', 'Rank')">
+                                            <div id="excel-list-changes-Rank" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Rank')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Rank')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Name')" class="sort-header flex-1">Name <span id="sort-changes-Name"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Name', event)" id="filter-btn-changes-Name" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Name">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Name" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Name</div>
+                                            <input type="text" id="excel-search-changes-Name" placeholder="Type player name..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Name')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Name')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Race')" class="sort-header flex-1">Race <span id="sort-changes-Race"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Race', event)" id="filter-btn-changes-Race" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Race">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Race" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Race</span>
+                                                <button onclick="toggleSelectAllExcel('changes', 'Race')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-changes-Race" placeholder="Search race..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('changes', 'Race')">
+                                            <div id="excel-list-changes-Race" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Race')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Race')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Rank Movement')" class="sort-header flex-1">Rank Shift <span id="sort-changes-Rank Movement"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Rank Movement', event)" id="filter-btn-changes-Rank Movement" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Rank Shift">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Rank Movement" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Rank Shift</div>
+                                            <input type="text" id="excel-search-changes-Rank Movement" placeholder="e.g. ▲, ▼, NEW..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Rank Movement')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Rank Movement')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Level Movement')" class="sort-header flex-1">Level Shift <span id="sort-changes-Level Movement"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Level Movement', event)" id="filter-btn-changes-Level Movement" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Level Shift">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Level Movement" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Level Shift</div>
+                                            <input type="text" id="excel-search-changes-Level Movement" placeholder="e.g. ▲, +1..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Level Movement')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Level Movement')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortChangesTable('Guild')" class="sort-header flex-1">Guild Movement <span id="sort-changes-Guild"></span></span>
+                                            <button onclick="toggleExcelFilter('changes', 'Guild', event)" id="filter-btn-changes-Guild" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Guild">🔻</button>
+                                        </div>
+                                        <div id="popover-changes-Guild" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Guild</span>
+                                                <button onclick="toggleSelectAllExcel('changes', 'Guild')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-changes-Guild" placeholder="Search guild..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('changes', 'Guild')">
+                                            <div id="excel-list-changes-Guild" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('changes', 'Guild')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('changes', 'Guild')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="changes-table-body" class="divide-y divide-slate-700/30"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: CLASS STATISTICS -->
+            <div id="class-tab" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-base font-bold text-slate-200">Average Level per Class</h2>
+                            <span class="text-xs text-slate-400">Click bar for class breakdown</span>
+                        </div>
+                        <div class="chart-container"><canvas id="classAvgLevelChart"></canvas></div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-base font-bold text-slate-200">Class Share of Daily XP</h2>
+                            <span class="text-xs text-slate-400">Click slice for class breakdown</span>
+                        </div>
+                        <div class="chart-container"><canvas id="classXpShareChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- 100% STACKED BAR CHART: CLASS LEVEL BRACKET BREAKDOWN -->
+                <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-200">Class Composition by Level Bracket (100% Distribution)</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Demographic race balance per level threshold across the server</p>
+                        </div>
+                        <span class="text-xs text-slate-400 hidden sm:inline">Hover bar segments for details</span>
+                    </div>
+                    <div class="chart-container" style="height: 320px;"><canvas id="classLevelBracketChart"></canvas></div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-bold text-amber-400">Class Champions (Top 3 Players Per Race)</h2>
+                        <span class="text-xs text-slate-400">Click card title or name for details</span>
+                    </div>
+                    
+                    <div id="class-champions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </div>
+            </div>
+
+            <!-- TAB 4: GUILD STATISTICS -->
+            <div id="guilds-tab" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <h2 class="text-base font-bold text-slate-200 mb-4">Top Guilds (Daily XP)</h2>
+                        <div class="chart-container"><canvas id="guildXpChart"></canvas></div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <h2 class="text-base font-bold text-slate-200 mb-4">7-Day Server XP Output</h2>
+                        <div class="chart-container"><canvas id="serverTrendChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl">
+                    <div class="p-5 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-200">Guild Performance Overview</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Click any guild name to view full guild summary modal</p>
+                        </div>
+                        <button onclick="clearAllGuildsFilters()" class="text-xs font-bold text-slate-400 hover:text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg transition">Clear All Column Filters</button>
+                    </div>
+                    <div class="overflow-auto max-h-[600px] relative">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="sticky top-0 z-20 bg-slate-900 uppercase text-xs font-bold text-slate-400 border-b border-slate-700/50 tracking-wider shadow-md">
+                                <tr>
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortGuildTable('Guild')" class="sort-header flex-1">Guild <span id="sort-guild-Guild"></span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Guild', event)" id="filter-btn-guilds-Guild" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Guild">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Guild" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Guild</span>
+                                                <button onclick="toggleSelectAllExcel('guilds', 'Guild')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-guilds-Guild" placeholder="Search guild..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('guilds', 'Guild')">
+                                            <div id="excel-list-guilds-Guild" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Guild')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Guild')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortGuildTable('Members')" class="sort-header">Members <span id="sort-guild-Members"></span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Members', event)" id="filter-btn-guilds-Members" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Members">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Members" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Members</div>
+                                            <input type="number" id="excel-search-guilds-Members" placeholder="Min members..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Members')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Members')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortGuildTable('Average_Level')" class="sort-header">Avg Level <span id="sort-guild-Average_Level"></span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Average_Level', event)" id="filter-btn-guilds-Average_Level" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Avg Level">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Average_Level" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Avg Level</div>
+                                            <input type="number" id="excel-search-guilds-Average_Level" placeholder="Min avg level..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Average_Level')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Average_Level')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortGuildTable('Highest_Level')" class="sort-header">Max Level <span id="sort-guild-Highest_Level"></span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Highest_Level', event)" id="filter-btn-guilds-Highest_Level" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Highest Level">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Highest_Level" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Highest Level</div>
+                                            <input type="number" id="excel-search-guilds-Highest_Level" placeholder="Min level..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Highest_Level')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Highest_Level')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortGuildTable('Total_Daily_XP')" class="sort-header">Total Daily XP <span id="sort-guild-Total_Daily_XP">▼</span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Total_Daily_XP', event)" id="filter-btn-guilds-Total_Daily_XP" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Total Daily XP">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Total_Daily_XP" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Daily XP</div>
+                                            <input type="number" id="excel-search-guilds-Total_Daily_XP" placeholder="Min daily XP..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Total_Daily_XP')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Total_Daily_XP')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortGuildTable('Total_Avg_7Day_XP')" class="sort-header">Total 7 Day Avg XP <span id="sort-guild-Total_Avg_7Day_XP"></span></span>
+                                            <button onclick="toggleExcelFilter('guilds', 'Total_Avg_7Day_XP', event)" id="filter-btn-guilds-Total_Avg_7Day_XP" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Total 7D XP">🔻</button>
+                                        </div>
+                                        <div id="popover-guilds-Total_Avg_7Day_XP" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min 7-Day XP</div>
+                                            <input type="number" id="excel-search-guilds-Total_Avg_7Day_XP" placeholder="Min 7-day XP..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('guilds', 'Total_Avg_7Day_XP')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('guilds', 'Total_Avg_7Day_XP')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="guilds-table-body" class="divide-y divide-slate-700/30"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- CHARACTER SUMMARY MODAL -->
+    <div id="character-modal" class="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeAllModals()">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 text-slate-100 relative" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 id="modal-char-name" class="text-2xl font-black text-amber-400 tracking-tight">PlayerName</h2>
+                        <span id="modal-char-race" class="px-2.5 py-0.5 rounded-full text-xs font-bold cursor-pointer hover:opacity-80 transition">Race</span>
+                        <span id="modal-char-rank" class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs px-2 py-0.5 rounded font-bold">#1</span>
+                    </div>
+                    <p id="modal-char-guild" class="text-sm text-slate-400 mt-1.5">Guild: <span class="text-slate-200 font-semibold">[Guild]</span></p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="char-modal-back-btn" onclick="navigateModalBack()" class="hidden text-amber-400 hover:text-amber-300 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl transition text-xs font-bold leading-none">← Back</button>
+                    <button onclick="closeAllModals()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-xl transition font-bold text-sm leading-none">✕</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Current Level</span>
+                    <div id="modal-char-level" class="text-xl font-black text-white mt-0.5">0</div>
+                </div>
+                <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Daily XP</span>
+                    <div id="modal-char-daily-xp" class="text-lg font-extrabold text-cyan-400 mt-0.5">0</div>
+                </div>
+                <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">7-Day Avg XP</span>
+                    <div id="modal-char-avg-xp" class="text-lg font-extrabold text-emerald-400 mt-0.5">0</div>
+                </div>
+                <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Snapshot Movement</span>
+                    <div id="modal-char-movement" class="text-xs font-bold text-slate-200 mt-1">No Shift</div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/40 rounded-xl p-4 border border-slate-800 space-y-2.5 text-xs">
+                <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                    <span class="text-slate-400">Class Standing</span>
+                    <span id="modal-char-race-standing" class="font-bold text-amber-400">Rank #1 Bulkan</span>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                    <span class="text-slate-400">Guild Transition</span>
+                    <span id="modal-char-guild-transition" class="font-semibold text-slate-200">No recent transfer</span>
+                </div>
+                <div class="flex justify-between items-center py-1">
+                    <span class="text-slate-400">Est. Guild XP Contribution</span>
+                    <span id="modal-char-guild-share" class="font-bold text-cyan-400">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GUILD SUMMARY MODAL -->
+    <div id="guild-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeAllModals()">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-5 text-slate-100 relative max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between border-b border-slate-800 pb-4 flex-shrink-0">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 id="modal-guild-name" class="text-2xl font-black text-amber-400 tracking-tight">[Guild]</h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1.5">Top Ranked Player: <span id="modal-guild-leader" class="text-white font-bold cursor-pointer hover:text-amber-400 transition" onclick="openCharacterFromGuildModal()">-</span></p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="guild-modal-back-btn" onclick="navigateModalBack()" class="hidden text-amber-400 hover:text-amber-300 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl transition text-xs font-bold leading-none">← Back</button>
+                    <button onclick="closeAllModals()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-xl transition font-bold text-sm leading-none">✕</button>
+                </div>
+            </div>
+
+            <div class="space-y-5 overflow-y-auto pr-1 flex-1">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Ranked Members</span>
+                        <div id="modal-guild-total-members" class="text-xl font-black text-white mt-0.5">0</div>
+                        <div id="modal-guild-7d-active" class="text-[10px] text-emerald-400 font-semibold mt-0.5">0 earned XP (7D)</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Average Level</span>
+                        <div id="modal-guild-avg-lvl" class="text-xl font-black text-amber-400 mt-0.5">Lvl 0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Combined Daily XP</span>
+                        <div id="modal-guild-daily-xp" class="text-lg font-extrabold text-cyan-400 mt-0.5" title="0">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">7-Day Combined XP</span>
+                        <div id="modal-guild-7d-xp" class="text-lg font-extrabold text-emerald-400 mt-0.5" title="0">0</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="text-xs uppercase font-bold text-slate-300 tracking-wider">Guild Class Composition</h3>
+                        <div id="modal-guild-race-bars" class="space-y-2 text-xs"></div>
+                    </div>
+
+                    <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-2">
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Top 5 Daily XP Contributors</span>
+                            <div id="modal-guild-top-contributors-list" class="space-y-1.5 mt-2 text-xs"></div>
+                        </div>
+                        <div class="text-[11px] text-slate-400 border-t border-slate-800 pt-2 flex justify-between">
+                            <span>Top 5 Guild Share:</span>
+                            <span id="modal-guild-top-5-share" class="font-bold text-amber-400">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/40 rounded-xl border border-slate-800 overflow-hidden">
+                    <div class="p-3 border-b border-slate-800 flex justify-between items-center gap-2">
+                        <h3 class="text-xs uppercase font-bold text-slate-300 tracking-wider">Guild Roster</h3>
+                        <input type="text" id="modal-guild-roster-search" placeholder="Search member..." class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-amber-500 w-36" onkeyup="filterGuildRosterTable()">
+                    </div>
+                    <div class="max-h-48 overflow-y-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="sticky top-0 bg-slate-900 text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
+                                <tr>
+                                    <th class="py-2 px-3">Rank</th>
+                                    <th class="py-2 px-3">Name</th>
+                                    <th class="py-2 px-3">Race</th>
+                                    <th class="py-2 px-3 text-right">Level</th>
+                                    <th class="py-2 px-3 text-right">Daily XP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-guild-roster-body" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RACE / CLASS SUMMARY MODAL -->
+    <div id="class-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeAllModals()">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-5 text-slate-100 relative max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between border-b border-slate-800 pb-4 flex-shrink-0">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 id="modal-class-title" class="text-2xl font-black text-amber-400 tracking-tight">Bulkan Class Summary</h2>
+                        <span id="modal-class-pill" class="px-2.5 py-0.5 rounded-full text-xs font-bold">Bulkan</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1.5">Highest Level Character: <span id="modal-class-top-char" class="text-white font-bold cursor-pointer hover:text-amber-400 transition" onclick="openCharacterFromClassModal()">-</span></p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="class-modal-back-btn" onclick="navigateModalBack()" class="hidden text-amber-400 hover:text-amber-300 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl transition text-xs font-bold leading-none">← Back</button>
+                    <button onclick="closeAllModals()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-xl transition font-bold text-sm leading-none">✕</button>
+                </div>
+            </div>
+
+            <div class="space-y-5 overflow-y-auto pr-1 flex-1">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Population</span>
+                        <div id="modal-class-total-pop" class="text-xl font-black text-white mt-0.5">0</div>
+                        <div id="modal-class-pop-pct" class="text-[10px] text-amber-400 font-semibold mt-0.5">0% of server</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Average Level</span>
+                        <div id="modal-class-avg-lvl" class="text-xl font-black text-amber-400 mt-0.5">Lvl 0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Combined Daily XP</span>
+                        <div id="modal-class-daily-xp" class="text-lg font-extrabold text-cyan-400 mt-0.5" title="0">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">7-Day Combined XP</span>
+                        <div id="modal-class-7d-xp" class="text-lg font-extrabold text-emerald-400 mt-0.5" title="0">0</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="text-xs uppercase font-bold text-slate-300 tracking-wider">Level Distribution Brackets</h3>
+                        <div id="modal-class-level-bars" class="space-y-2 text-xs"></div>
+                    </div>
+
+                    <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="text-xs uppercase font-bold text-slate-300 tracking-wider">Top Guild Density</h3>
+                        <div id="modal-class-guild-list" class="space-y-2 text-xs"></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/40 rounded-xl border border-slate-800 overflow-hidden">
+                    <div class="p-3 border-b border-slate-800 flex justify-between items-center">
+                        <h3 class="text-xs uppercase font-bold text-slate-300 tracking-wider">Top 5 Class Leaderboard</h3>
+                        <span class="text-[10px] text-slate-400">Ranked by Server Rank</span>
+                    </div>
+                    <div class="max-h-52 overflow-y-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="sticky top-0 bg-slate-900 text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
+                                <tr>
+                                    <th class="py-2 px-3">Class Rank</th>
+                                    <th class="py-2 px-3">Server Rank</th>
+                                    <th class="py-2 px-3">Name</th>
+                                    <th class="py-2 px-3">Guild</th>
+                                    <th class="py-2 px-3 text-right">Level</th>
+                                    <th class="py-2 px-3 text-right">Daily XP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-class-top5-body" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawData = null;
+        let raceChart = null, xpChart = null, guildXpChart = null, serverTrendChart = null;
+        let classAvgLevelChart = null, classXpShareChart = null, classLevelBracketChart = null;
+
+        let activeRaceFilter = null;
+        let activePlayerFilter = null;
+        
+        let currentSortColumn = 'Rank';
+        let currentSortAscending = true;
+
+        let changesSortColumn = 'Rank Movement';
+        let changesSortAscending = false;
+
+        let guildSortColumn = 'Total_Daily_XP';
+        let guildSortAscending = false;
+
+        let activeModalGuildMembers = [];
+
+        // Global Navigation Stack to handle multi-level modal browsing cleanly
+        let modalStack = [];
+        let baseZIndex = 60;
+
+        function formatXP(val) {
+            if (val === null || val === undefined || isNaN(val)) return '0';
+            const num = Number(val);
+            const abs = Math.abs(num);
+            if (abs < 1000000) return num.toLocaleString();
+            if (abs < 1000000000) return (num / 1000000).toFixed(2) + 'M';
+            if (abs < 1000000000000) return (num / 1000000000).toFixed(2) + 'B';
+            return (num / 1000000000000).toFixed(2) + 'T';
+        }
+
+        const excelFilters = {
+            rankings: { Rank: null, Name: "", Level: null, Race: null, Guild: null, 'Daily XP': null },
+            changes: { Rank: null, Name: "", Race: null, 'Rank Movement': "", 'Level Movement': "", Guild: null },
+            guilds: { Guild: null, Members: null, Average_Level: null, Highest_Level: null, Total_Daily_XP: null, Total_Avg_7Day_XP: null }
+        };
+
+        function getRaceColor(raceName) {
+            if (!raceName) return '#9ca3af';
+            const str = String(raceName).trim().toLowerCase();
+            if (str.includes('bulkan')) return '#ef4444';
+            if (str.includes('kailipton')) return '#3b82f6';
+            if (str.includes('human')) return '#22c55e';
+            if (str.includes('aidia')) return '#eab308';
+            if (str.includes('hybrid')) return '#a855f7';
+            if (str.includes('perom')) return '#9ca3af';
+            return '#38bdf8';
+        }
+
+        const commonChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#cbd5e1', font: { family: 'sans-serif', size: 11, weight: '500' } } },
+                tooltip: { backgroundColor: '#0f172a', titleColor: '#f8fafc', bodyColor: '#cbd5e1', borderColor: '#334155', borderWidth: 1, padding: 10, cornerRadius: 8 }
+            }
+        };
+
+        // AUTO-FETCH DATA ON PAGE LOAD
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch('data.json')
+                .then(response => {
+                    if (!response.ok) throw new Error('data.json not found on web server');
+                    return response.json();
+                })
+                .then(data => {
+                    rawData = data;
+                    renderDashboard(rawData);
+                })
+                .catch(err => {
+                    console.log("Auto-fetch fallback: ", err.message);
+                    document.getElementById('last-updated').innerText = "Status: Waiting for data.json file...";
+                });
+        });
+
+        document.getElementById('json-input').addEventListener('change', (e) => { if (e.target.files[0]) readJSONFile(e.target.files[0]); });
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0) readJSONFile(e.dataTransfer.files[0]); });
+
+        function readJSONFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    rawData = JSON.parse(e.target.result);
+                    renderDashboard(rawData);
+                } catch (err) { alert("Error parsing data.json: " + err.message); }
+            };
+            reader.readAsText(file);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-amber-400', 'border-amber-400');
+                btn.classList.add('text-slate-400', 'border-transparent');
+            });
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-slate-400', 'border-transparent');
+                activeBtn.classList.add('text-amber-400', 'border-amber-400');
+            }
+        }
+
+        function renderDashboard(data) {
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('last-updated').innerText = `Last Updated: ${data.last_updated || 'N/A'}`;
+            const rankings = data.rankings || [];
+            const changes = data.changes || [];
+            const xpHistory = data.xp_history || [];
+            const guildsSet = new Set(rankings.map(p => p.Guild).filter(g => g && g !== "-"));
+            document.getElementById('stat-guilds').innerText = guildsSet.size;
+            renderRaceChart(rankings);
+            renderXPChart(rankings);
+            applyFiltersAndSort();
+            renderChangesTab(changes, rankings);
+            renderClassAnalytics(rankings);
+            renderGuildAnalytics(rankings, xpHistory);
+        }
+
+        function pushModalState(type, id) {
+            if (modalStack.length > 0) {
+                const top = modalStack[modalStack.length - 1];
+                if (top.type === type && top.id === id) return;
+            }
+            modalStack.push({ type, id });
+            updateModalStackUI();
+        }
+
+        function navigateModalBack() {
+            if (modalStack.length <= 1) {
+                closeAllModals();
+                return;
+            }
+            modalStack.pop();
+            const previous = modalStack[modalStack.length - 1];
+            
+            document.getElementById('character-modal').classList.add('hidden');
+            document.getElementById('guild-modal').classList.add('hidden');
+            document.getElementById('class-modal').classList.add('hidden');
+
+            if (previous.type === 'character') {
+                renderCharacterModalContent(previous.id);
+            } else if (previous.type === 'guild') {
+                renderGuildModalContent(previous.id);
+            } else if (previous.type === 'class') {
+                renderClassModalContent(previous.id);
+            }
+            updateModalStackUI();
+        }
+
+        function updateModalStackUI() {
+            const charBackBtn = document.getElementById('char-modal-back-btn');
+            const guildBackBtn = document.getElementById('guild-modal-back-btn');
+            const classBackBtn = document.getElementById('class-modal-back-btn');
+
+            if (modalStack.length > 1) {
+                const prevItem = modalStack[modalStack.length - 2];
+                let prevLabel = '← Back';
+                if (prevItem.type === 'character') prevLabel = `← Back to ${prevItem.id}`;
+                else if (prevItem.type === 'guild') prevLabel = `← Back to [${prevItem.id}]`;
+                else if (prevItem.type === 'class') prevLabel = `← Back to ${prevItem.id}`;
+                
+                if (charBackBtn) { charBackBtn.innerText = prevLabel; charBackBtn.classList.remove('hidden'); }
+                if (guildBackBtn) { guildBackBtn.innerText = prevLabel; guildBackBtn.classList.remove('hidden'); }
+                if (classBackBtn) { classBackBtn.innerText = prevLabel; classBackBtn.classList.remove('hidden'); }
+            } else {
+                if (charBackBtn) charBackBtn.classList.add('hidden');
+                if (guildBackBtn) guildBackBtn.classList.add('hidden');
+                if (classBackBtn) classBackBtn.classList.add('hidden');
+            }
+        }
+
+        function closeAllModals() {
+            modalStack = [];
+            document.getElementById('character-modal').classList.add('hidden');
+            document.getElementById('guild-modal').classList.add('hidden');
+            document.getElementById('class-modal').classList.add('hidden');
+        }
+
+        function openCharacterModal(playerName) {
+            if (!rawData || !rawData.rankings || !playerName) return;
+            document.getElementById('guild-modal').classList.add('hidden');
+            document.getElementById('class-modal').classList.add('hidden');
+            pushModalState('character', playerName);
+            renderCharacterModalContent(playerName);
+        }
+
+        function renderCharacterModalContent(playerName) {
+            const player = rawData.rankings.find(p => p.Name === playerName);
+            if (!player) return;
+
+            const charModal = document.getElementById('character-modal');
+            charModal.style.zIndex = baseZIndex + modalStack.length * 10;
+
+            document.getElementById('modal-char-name').innerText = player.Name;
+            const raceColor = getRaceColor(player.Race);
+            const textColor = (raceColor === '#eab308' || raceColor === '#9ca3af') ? '#0f172a' : '#ffffff';
+            const raceEl = document.getElementById('modal-char-race');
+            raceEl.innerText = player.Race || 'Unknown';
+            raceEl.style.backgroundColor = raceColor;
+            raceEl.style.color = textColor;
+            raceEl.onclick = () => openClassModal(player.Race);
+
+            document.getElementById('modal-char-rank').innerText = `#${player.Rank || '-'}`;
+            const pGuild = player.Guild && player.Guild !== '-' ? player.Guild : null;
+            document.getElementById('modal-char-guild').innerHTML = pGuild 
+                ? `Guild: <span class="text-amber-400 font-bold hover:underline cursor-pointer" onclick="openGuildModal('${pGuild}')">${pGuild}</span>`
+                : `Guild: <span class="text-slate-400 font-semibold">No Guild</span>`;
+
+            document.getElementById('modal-char-level').innerText = `Lvl ${player.Level || '-'}`;
+            document.getElementById('modal-char-daily-xp').innerText = `+${formatXP(player['Daily XP'] || 0)} XP`;
+            const avgXP = player['Average Daily XP'] || player['Average Daily XP '] || player['7-Day Avg XP'] || 0;
+            document.getElementById('modal-char-avg-xp').innerText = `${formatXP(avgXP)} XP`;
+
+            const changeRecord = (rawData.enrichedChanges || rawData.changes || []).find(c => c.Name === playerName);
+            let movementHTML = '<span class="text-slate-400 font-normal">No shift recorded</span>';
+            if (changeRecord) {
+                const rShift = changeRecord['Rank Movement'] || '=';
+                const lShift = changeRecord['Level Movement'] || '=';
+                
+                const formatShift = (shiftStr, label) => {
+                    let colorClass = 'text-slate-300';
+                    if (shiftStr.includes('▲')) colorClass = 'text-emerald-400';
+                    else if (shiftStr.includes('▼')) colorClass = 'text-rose-400';
+                    else if (shiftStr.includes('NEW')) colorClass = 'text-amber-400';
+                    return `<div><span class="text-slate-400 font-normal">${label}:</span> <span class="${colorClass}">${shiftStr}</span></div>`;
+                };
+
+                movementHTML = `
+                    <div class="space-y-0.5 mt-0.5 font-bold">
+                        ${formatShift(rShift, 'Rank')}
+                        ${formatShift(lShift, 'Lvl')}
+                    </div>
+                `;
+            }
+            document.getElementById('modal-char-movement').innerHTML = movementHTML;
+
+            const sameRace = rawData.rankings
+                .filter(p => p.Race?.trim() === player.Race?.trim())
+                .sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
+            const raceRank = sameRace.findIndex(p => p.Name === player.Name) + 1;
+            document.getElementById('modal-char-race-standing').innerHTML = raceRank > 0 
+                ? `#${raceRank} <span class="hover:underline cursor-pointer" onclick="openClassModal('${player.Race}')">${player.Race}</span> on Server` 
+                : "N/A";
+
+            if (changeRecord && changeRecord.Guild_Previous && changeRecord.Guild_Previous !== changeRecord.Guild) {
+                const prevH = (changeRecord.Guild_Previous !== '-') ? `<span class="hover:underline cursor-pointer text-slate-300" onclick="openGuildModal('${changeRecord.Guild_Previous}')">${changeRecord.Guild_Previous}</span>` : '-';
+                const nextH = (changeRecord.Guild !== '-') ? `<span class="hover:underline cursor-pointer text-amber-400 font-bold" onclick="openGuildModal('${changeRecord.Guild}')">${changeRecord.Guild}</span>` : '-';
+                document.getElementById('modal-char-guild-transition').innerHTML = `${prevH} ➔ ${nextH}`;
+            } else {
+                document.getElementById('modal-char-guild-transition').innerText = "No recent transfer";
+            }
+
+            if (player.Guild && player.Guild !== '-') {
+                const guildMembers = rawData.rankings.filter(p => p.Guild === player.Guild);
+                const totalGuildXP = guildMembers.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
+                const share = totalGuildXP > 0 ? (((player['Daily XP'] || 0) / totalGuildXP) * 100).toFixed(1) : 0;
+                document.getElementById('modal-char-guild-share').innerHTML = `${share}% of <span class="hover:underline cursor-pointer" onclick="openGuildModal('${player.Guild}')">${player.Guild}</span> XP`;
+            } else {
+                document.getElementById('modal-char-guild-share').innerText = "N/A (No Guild)";
+            }
+
+            charModal.classList.remove('hidden');
+        }
+
+        function openCharacterModalFromElement(elemId) {
+            const el = document.getElementById(elemId);
+            if (el && el.innerText && el.innerText !== '-') {
+                openCharacterModal(el.innerText);
+            }
+        }
+
+        function openGuildModal(guildName) {
+            if (!rawData || !rawData.rankings || !guildName || guildName === '-' || guildName === '(No Guild)') return;
+            document.getElementById('character-modal').classList.add('hidden');
+            document.getElementById('class-modal').classList.add('hidden');
+            pushModalState('guild', guildName);
+            renderGuildModalContent(guildName);
+        }
+
+        function renderGuildModalContent(guildName) {
+            const guildMembers = rawData.rankings.filter(p => p.Guild === guildName);
+            if (guildMembers.length === 0) return;
+
+            const guildModal = document.getElementById('guild-modal');
+            guildModal.style.zIndex = baseZIndex + modalStack.length * 10;
+
+            activeModalGuildMembers = [...guildMembers].sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
+            document.getElementById('modal-guild-name').innerText = `[${guildName}]`;
+            
+            const active7DayMembers = guildMembers.filter(p => {
+                const avgXP = p['Average Daily XP'] || p['Average Daily XP '] || p['7-Day Avg XP'] || 0;
+                return (p['Daily XP'] || 0) > 0 || avgXP > 0;
+            });
+
+            const topChar = [...guildMembers].sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999))[0];
+            const leaderEl = document.getElementById('modal-guild-leader');
+            leaderEl.innerText = topChar ? `${topChar.Name} (Lvl ${topChar.Level})` : '-';
+            leaderEl.dataset.playerName = topChar ? topChar.Name : '';
+
+            document.getElementById('modal-guild-total-members').innerText = guildMembers.length;
+            document.getElementById('modal-guild-7d-active').innerText = `${active7DayMembers.length} earned XP in last 7D`;
+            const sumLvl = guildMembers.reduce((acc, p) => acc + (p.Level || 0), 0);
+            document.getElementById('modal-guild-avg-lvl').innerText = `Lvl ${(sumLvl / guildMembers.length).toFixed(1)}`;
+
+            const totalDailyXP = guildMembers.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
+            const dailyXpEl = document.getElementById('modal-guild-daily-xp');
+            dailyXpEl.innerText = `+${formatXP(totalDailyXP)}`;
+            dailyXpEl.title = `Full Value: +${totalDailyXP.toLocaleString()} XP`;
+
+            const total7DayXP = guildMembers.reduce((acc, p) => {
+                const avgXP = p['Average Daily XP'] || p['Average Daily XP '] || p['7-Day Avg XP'] || 0;
+                return acc + avgXP;
+            }, 0);
+            const xp7dEl = document.getElementById('modal-guild-7d-xp');
+            xp7dEl.innerText = formatXP(total7DayXP);
+            xp7dEl.title = `Full Value: ${total7DayXP.toLocaleString()} XP`;
+
+            const raceCounts = {};
+            guildMembers.forEach(p => {
+                const r = p.Race ? p.Race.trim() : 'Unknown';
+                raceCounts[r] = (raceCounts[r] || 0) + 1;
+            });
+            const raceContainer = document.getElementById('modal-guild-race-bars');
+            raceContainer.innerHTML = '';
+            Object.entries(raceCounts).sort((a, b) => b[1] - a[1]).forEach(([race, count]) => {
+                const pct = ((count / guildMembers.length) * 100).toFixed(0);
+                const rColor = getRaceColor(race);
+                const item = document.createElement('div');
+                item.className = "space-y-1 cursor-pointer hover:opacity-80 transition";
+                item.onclick = () => openClassModal(race);
+                item.innerHTML = `
+                    <div class="flex justify-between font-semibold">
+                        <span style="color: ${rColor}">${race}</span>
+                        <span class="text-slate-400">${count} (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                        <div class="h-full rounded-full" style="width: ${pct}%; background-color: ${rColor}"></div>
+                    </div>
+                `;
+                raceContainer.appendChild(item);
+            });
+
+            const sortedByXP = [...guildMembers].sort((a, b) => (b['Daily XP'] || 0) - (a['Daily XP'] || 0)).slice(0, 5);
+            const contribContainer = document.getElementById('modal-guild-top-contributors-list');
+            contribContainer.innerHTML = '';
+
+            let top5TotalXP = 0;
+            if (sortedByXP.length === 0 || totalDailyXP === 0) {
+                contribContainer.innerHTML = `<div class="text-slate-500 italic py-2">No daily XP contributions recorded today.</div>`;
+                document.getElementById('modal-guild-top-5-share').innerText = '0%';
+            } else {
+                sortedByXP.forEach((p, idx) => {
+                    const pXP = p['Daily XP'] || 0;
+                    top5TotalXP += pXP;
+                    const share = totalDailyXP > 0 ? ((pXP / totalDailyXP) * 100).toFixed(1) : 0;
+                    const row = document.createElement('div');
+                    row.className = "flex items-center justify-between py-1 border-b border-slate-800/60 last:border-none";
+                    row.innerHTML = `
+                        <div class="flex items-center gap-1.5 truncate pr-2">
+                            <span class="text-[10px] font-bold text-slate-500 w-3">#${idx + 1}</span>
+                            <span class="font-bold text-white hover:text-amber-400 cursor-pointer truncate" onclick="openCharacterModal('${p.Name}')">${p.Name}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-right flex-shrink-0">
+                            <span class="font-mono text-cyan-400 font-bold">+${formatXP(pXP)}</span>
+                            <span class="text-[10px] font-bold text-slate-400 w-10 text-right">${share}%</span>
+                        </div>
+                    `;
+                    contribContainer.appendChild(row);
+                });
+                const top5Share = totalDailyXP > 0 ? ((top5TotalXP / totalDailyXP) * 100).toFixed(1) : 0;
+                document.getElementById('modal-guild-top-5-share').innerText = `${top5Share}%`;
+            }
+
+            renderGuildRosterTable(activeModalGuildMembers);
+            guildModal.classList.remove('hidden');
+        }
+
+        function renderGuildRosterTable(members) {
+            const tbody = document.getElementById('modal-guild-roster-body');
+            tbody.innerHTML = '';
+            if (members.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500">No members found.</td></tr>`;
+                return;
+            }
+            members.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/60 transition";
+                const rColor = getRaceColor(p.Race);
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-bold text-amber-400">#${p.Rank}</td>
+                    <td class="py-2 px-3 font-bold text-white hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${p.Name}')">${p.Name}</td>
+                    <td class="py-2 px-3"><span style="color: ${rColor}" class="font-semibold hover:underline cursor-pointer" onclick="openClassModal('${p.Race}')">${p.Race}</span></td>
+                    <td class="py-2 px-3 text-right font-bold text-slate-200">Lvl ${p.Level}</td>
+                    <td class="py-2 px-3 text-right font-mono text-cyan-400">+${formatXP(p['Daily XP'] || 0)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterGuildRosterTable() {
+            const query = document.getElementById('modal-guild-roster-search').value.toLowerCase();
+            const filtered = activeModalGuildMembers.filter(p => 
+                p.Name.toLowerCase().includes(query) || 
+                p.Race.toLowerCase().includes(query)
+            );
+            renderGuildRosterTable(filtered);
+        }
+
+        function openCharacterFromGuildModal() {
+            const name = document.getElementById('modal-guild-leader').dataset.playerName;
+            if (name) openCharacterModal(name);
+        }
+
+        function openClassModal(raceName) {
+            if (!rawData || !rawData.rankings || !raceName) return;
+            document.getElementById('character-modal').classList.add('hidden');
+            document.getElementById('guild-modal').classList.add('hidden');
+            pushModalState('class', raceName);
+            renderClassModalContent(raceName);
+        }
+
+        function renderClassModalContent(raceName) {
+            const classMembers = rawData.rankings.filter(p => p.Race?.trim() === raceName.trim());
+            if (classMembers.length === 0) return;
+
+            const classModal = document.getElementById('class-modal');
+            classModal.style.zIndex = baseZIndex + modalStack.length * 10;
+
+            const rColor = getRaceColor(raceName);
+            const textColor = (rColor === '#eab308' || rColor === '#9ca3af') ? '#0f172a' : '#ffffff';
+
+            document.getElementById('modal-class-title').innerText = `${raceName} Class Summary`;
+            const pillEl = document.getElementById('modal-class-pill');
+            pillEl.innerText = raceName;
+            pillEl.style.backgroundColor = rColor;
+            pillEl.style.color = textColor;
+
+            const sortedByRank = [...classMembers].sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
+            const topChar = sortedByRank[0];
+            const topCharEl = document.getElementById('modal-class-top-char');
+            topCharEl.innerText = topChar ? `${topChar.Name} (Lvl ${topChar.Level})` : '-';
+            topCharEl.dataset.playerName = topChar ? topChar.Name : '';
+
+            const totalServerPlayers = rawData.rankings.length;
+            document.getElementById('modal-class-total-pop').innerText = classMembers.length;
+            const popPct = totalServerPlayers > 0 ? ((classMembers.length / totalServerPlayers) * 100).toFixed(1) : 0;
+            document.getElementById('modal-class-pop-pct').innerText = `${popPct}% of server`;
+
+            const sumLvl = classMembers.reduce((acc, p) => acc + (p.Level || 0), 0);
+            document.getElementById('modal-class-avg-lvl').innerText = `Lvl ${(sumLvl / classMembers.length).toFixed(1)}`;
+
+            const totalDailyXP = classMembers.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
+            const dailyXpEl = document.getElementById('modal-class-daily-xp');
+            dailyXpEl.innerText = `+${formatXP(totalDailyXP)}`;
+            dailyXpEl.title = `Full Value: +${totalDailyXP.toLocaleString()} XP`;
+
+            const total7DayXP = classMembers.reduce((acc, p) => {
+                const avgXP = p['Average Daily XP'] || p['Average Daily XP '] || p['7-Day Avg XP'] || 0;
+                return acc + avgXP;
+            }, 0);
+            const xp7dEl = document.getElementById('modal-class-7d-xp');
+            xp7dEl.innerText = formatXP(total7DayXP);
+            xp7dEl.title = `Full Value: ${total7DayXP.toLocaleString()} XP`;
+
+            const brackets = [
+                { label: 'Lvl < 250', min: 0, max: 249, count: 0 },
+                { label: 'Lvl 250 - 300', min: 250, max: 300, count: 0 },
+                { label: 'Lvl 301 - 340', min: 301, max: 340, count: 0 },
+                { label: 'Lvl 341 - 400', min: 341, max: 400, count: 0 },
+                { label: 'Lvl 400+', min: 401, max: 9999, count: 0 }
+            ];
+
+            classMembers.forEach(p => {
+                const lvl = p.Level || 0;
+                const b = brackets.find(br => lvl >= br.min && lvl <= br.max);
+                if (b) b.count++;
+            });
+
+            const levelBarsContainer = document.getElementById('modal-class-level-bars');
+            levelBarsContainer.innerHTML = '';
+            brackets.forEach(b => {
+                const pct = classMembers.length > 0 ? ((b.count / classMembers.length) * 100).toFixed(0) : 0;
+                const item = document.createElement('div');
+                item.className = "space-y-1";
+                item.innerHTML = `
+                    <div class="flex justify-between font-semibold">
+                        <span class="text-slate-300">${b.label}</span>
+                        <span class="text-slate-400">${b.count} (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                        <div class="h-full rounded-full" style="width: ${pct}%; background-color: ${rColor}"></div>
+                    </div>
+                `;
+                levelBarsContainer.appendChild(item);
+            });
+
+            const guildCounts = {};
+            classMembers.forEach(p => {
+                const g = (p.Guild && p.Guild !== '-') ? p.Guild : '(No Guild)';
+                guildCounts[g] = (guildCounts[g] || 0) + 1;
+            });
+
+            const topGuildsForClass = Object.entries(guildCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 4);
+
+            const guildListContainer = document.getElementById('modal-class-guild-list');
+            guildListContainer.innerHTML = '';
+            topGuildsForClass.forEach(([gName, count]) => {
+                const pct = ((count / classMembers.length) * 100).toFixed(0);
+                const isNoGuild = gName === '(No Guild)';
+                const gLabel = isNoGuild ? `<span class="text-slate-400 italic">(No Guild)</span>` : `<span class="font-bold text-amber-400 hover:underline cursor-pointer" onclick="openGuildModal('${gName}')">${gName}</span>`;
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between py-1 border-b border-slate-800/60 last:border-none";
+                item.innerHTML = `
+                    <div>${gLabel}</div>
+                    <div class="text-slate-400 font-semibold">${count} players (${pct}%)</div>
+                `;
+                guildListContainer.appendChild(item);
+            });
+
+            const top5Body = document.getElementById('modal-class-top5-body');
+            top5Body.innerHTML = '';
+            sortedByRank.slice(0, 5).forEach((p, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/60 transition";
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-bold text-amber-400">${medal}</td>
+                    <td class="py-2 px-3 text-slate-400 font-mono">#${p.Rank}</td>
+                    <td class="py-2 px-3 font-bold text-white hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${p.Name}')">${p.Name}</td>
+                    <td class="py-2 px-3 text-slate-400">${formatGuildCell(p.Guild)}</td>
+                    <td class="py-2 px-3 text-right font-bold text-slate-200">Lvl ${p.Level}</td>
+                    <td class="py-2 px-3 text-right font-mono text-cyan-400">+${formatXP(p['Daily XP'] || 0)}</td>
+                `;
+                top5Body.appendChild(tr);
+            });
+
+            classModal.classList.remove('hidden');
+        }
+
+        function openCharacterFromClassModal() {
+            const name = document.getElementById('modal-class-top-char').dataset.playerName;
+            if (name) openCharacterModal(name);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeAllModals();
+        });
+
+        function formatGuildCell(guildName) {
+            if (!guildName || guildName === '-' || guildName === '(No Guild)') return `<span class="text-slate-400 font-normal">-</span>`;
+            return `<span class="text-amber-400 font-bold hover:underline cursor-pointer" onclick="openGuildModal('${guildName}')">${guildName}</span>`;
+        }
+
+        function formatGuildMovementCell(prevGuild, nextGuild) {
+            if (prevGuild && prevGuild !== nextGuild) {
+                const prevHTML = (prevGuild && prevGuild !== '-') ? `<span class="text-slate-300 hover:text-amber-400 hover:underline cursor-pointer" onclick="openGuildModal('${prevGuild}')">${prevGuild}</span>` : '-';
+                const nextHTML = (nextGuild && nextGuild !== '-') ? `<span class="text-amber-400 font-bold hover:underline cursor-pointer" onclick="openGuildModal('${nextGuild}')">${nextGuild}</span>` : '-';
+                return `<span>${prevHTML} ➔ ${nextHTML}</span>`;
+            }
+            return formatGuildCell(nextGuild);
+        }
+
+        function toggleExcelFilter(tab, col, event) {
+            event.stopPropagation();
+            const popover = document.getElementById(`popover-${tab}-${col}`);
+            const isActive = popover ? popover.classList.contains('active') : false;
+            closeAllExcelFilters();
+            if (popover && !isActive) {
+                popover.classList.add('active');
+                renderExcelFilterList(tab, col);
+            }
+        }
+
+        function closeAllExcelFilters(event) {
+            document.querySelectorAll('.excel-filter-popover').forEach(el => el.classList.remove('active'));
+        }
+
+        function getUniqueColumnValues(tab, col) {
+            if (!rawData) return [];
+            let sourceData = [];
+            if (tab === 'rankings') sourceData = rawData.rankings || [];
+            else if (tab === 'changes') sourceData = rawData.enrichedChanges || rawData.changes || [];
+            else if (tab === 'guilds') sourceData = getGuildAggregates(rawData.rankings || []);
+
+            const set = new Set();
+            sourceData.forEach(item => {
+                let v = item[col];
+                if (v === undefined || v === null || v === '') v = '(Blank)';
+                set.add(String(v));
+            });
+            return Array.from(set).sort((a, b) => {
+                const numA = Number(a), numB = Number(b);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return a.localeCompare(b);
+            });
+        }
+
+        function renderExcelFilterList(tab, col) {
+            const listContainer = document.getElementById(`excel-list-${tab}-${col}`);
+            if (!listContainer) return;
+            const searchInput = document.getElementById(`excel-search-${tab}-${col}`);
+            const query = searchInput ? searchInput.value.toLowerCase() : '';
+            const uniqueVals = getUniqueColumnValues(tab, col);
+            const selectedSet = excelFilters[tab][col];
+
+            listContainer.innerHTML = '';
+            uniqueVals.forEach(val => {
+                if (query && !val.toLowerCase().includes(query)) return;
+                const isChecked = !selectedSet || selectedSet.has(val);
+                const item = document.createElement('label');
+                item.className = "flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white py-0.5";
+                item.innerHTML = `
+                    <input type="checkbox" data-tab="${tab}" data-col="${col}" value="${val}" ${isChecked ? 'checked' : ''} class="rounded border-slate-700 text-amber-500 focus:ring-0 bg-slate-900">
+                    <span class="truncate">${val}</span>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function toggleSelectAllExcel(tab, col) {
+            const checkboxes = document.querySelectorAll(`#excel-list-${tab}-${col} input[type="checkbox"]`);
+            if (checkboxes.length === 0) return;
+            const allChecked = Array.from(checkboxes).every(c => c.checked);
+            checkboxes.forEach(c => c.checked = !allChecked);
+        }
+
+        function applyExcelFilter(tab, col) {
+            const input = document.getElementById(`excel-search-${tab}-${col}`);
+            
+            if (col === 'Name' || col === 'Rank Movement' || col === 'Level Movement') {
+                excelFilters[tab][col] = input ? input.value.trim() : "";
+            } else if (['Daily XP', 'Members', 'Average_Level', 'Highest_Level', 'Total_Daily_XP', 'Total_Avg_7Day_XP'].includes(col)) {
+                const val = input ? parseFloat(input.value) : NaN;
+                excelFilters[tab][col] = isNaN(val) ? null : val;
+            } else {
+                const checkboxes = document.querySelectorAll(`#excel-list-${tab}-${col} input[type="checkbox"]`);
+                const allVals = getUniqueColumnValues(tab, col);
+                const checkedVals = Array.from(checkboxes).filter(c => c.checked).map(c => c.value);
+                if (checkedVals.length === allVals.length || checkedVals.length === 0) {
+                    excelFilters[tab][col] = null;
+                } else {
+                    excelFilters[tab][col] = new Set(checkedVals);
+                }
+            }
+            updateFilterButtonStates();
+            closeAllExcelFilters();
+
+            if (tab === 'rankings') applyFiltersAndSort();
+            else if (tab === 'changes') applyChangesFiltersAndSort();
+            else if (tab === 'guilds') applyGuildTableFiltersAndSort();
+        }
+
+        function resetExcelFilter(tab, col) {
+            excelFilters[tab][col] = null;
+            const searchInput = document.getElementById(`excel-search-${tab}-${col}`);
+            if (searchInput) searchInput.value = '';
+            updateFilterButtonStates();
+            closeAllExcelFilters();
+
+            if (tab === 'rankings') applyFiltersAndSort();
+            else if (tab === 'changes') applyChangesFiltersAndSort();
+            else if (tab === 'guilds') applyGuildTableFiltersAndSort();
+        }
+
+        function clearAllRankingsFilters() {
+            Object.keys(excelFilters.rankings).forEach(col => {
+                excelFilters.rankings[col] = null;
+                const searchInput = document.getElementById(`excel-search-rankings-${col}`);
+                if (searchInput) searchInput.value = '';
+            });
+            activeRaceFilter = null;
+            activePlayerFilter = null;
+            updateFilterButtonStates();
+            applyFiltersAndSort();
+        }
+
+        function clearAllChangesFilters() {
+            Object.keys(excelFilters.changes).forEach(col => {
+                excelFilters.changes[col] = null;
+                const searchInput = document.getElementById(`excel-search-changes-${col}`);
+                if (searchInput) searchInput.value = '';
+            });
+            updateFilterButtonStates();
+            applyChangesFiltersAndSort();
+        }
+
+        function clearAllGuildsFilters() {
+            Object.keys(excelFilters.guilds).forEach(col => {
+                excelFilters.guilds[col] = null;
+                const searchInput = document.getElementById(`excel-search-guilds-${col}`);
+                if (searchInput) searchInput.value = '';
+            });
+            updateFilterButtonStates();
+            applyGuildTableFiltersAndSort();
+        }
+
+        function updateFilterButtonStates() {
+            ['rankings', 'changes', 'guilds'].forEach(tab => {
+                let activeCount = 0;
+                Object.keys(excelFilters[tab]).forEach(col => {
+                    const btn = document.getElementById(`filter-btn-${tab}-${col}`);
+                    const isFiltered = excelFilters[tab][col] !== null && excelFilters[tab][col] !== "";
+                    if (btn) {
+                        if (isFiltered) {
+                            btn.classList.add('text-amber-400', 'font-bold');
+                            btn.classList.remove('text-slate-400');
+                            activeCount++;
+                        } else {
+                            btn.classList.remove('text-amber-400', 'font-bold');
+                            btn.classList.add('text-slate-400');
+                        }
+                    }
+                });
+                if (tab === 'rankings') {
+                    const banner = document.getElementById('active-filter-banner');
+                    const countEl = document.getElementById('active-filter-count');
+                    if (activeCount > 0 || activeRaceFilter || activePlayerFilter) {
+                        if (banner) banner.classList.remove('hidden');
+                        if (countEl) countEl.innerText = activeCount + (activeRaceFilter || activePlayerFilter ? 1 : 0);
+                    } else {
+                        if (banner) banner.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        function renderRaceChart(rankings) {
+            const counts = {};
+            rankings.forEach(p => { const r = p.Race ? p.Race.trim() : 'Unknown'; counts[r] = (counts[r] || 0) + 1; });
+            const labels = Object.keys(counts);
+            const ctx = document.getElementById('raceChart').getContext('2d');
+            if (raceChart) raceChart.destroy();
+            raceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: labels, datasets: [{ data: Object.values(counts), backgroundColor: labels.map(r => getRaceColor(r)), borderWidth: 2, borderColor: '#1e293b' }] },
+                options: { 
+                    ...commonChartOptions, cutout: '65%',
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const selectedRace = labels[activeElements[0].index];
+                            openClassModal(selectedRace);
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderXPChart(rankings) {
+            const sorted = [...rankings].sort((a, b) => (b['Daily XP'] || 0) - (a['Daily XP'] || 0)).slice(0, 10);
+            const ctx = document.getElementById('xpChart').getContext('2d');
+            if (xpChart) xpChart.destroy();
+            xpChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: sorted.map(p => p.Name), datasets: [{ label: 'Daily XP', data: sorted.map(p => p['Daily XP']), backgroundColor: sorted.map(p => getRaceColor(p.Race)), borderRadius: 6 }] },
+                options: {
+                    ...commonChartOptions,
+                    scales: { x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51, 65, 85, 0.4)' } } },
+                    plugins: { ...commonChartOptions.plugins, legend: { display: false } },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const selectedPlayer = sorted[activeElements[0].index].Name;
+                            openCharacterModal(selectedPlayer);
+                        }
+                    }
+                }
+            });
+        }
+
+        function applyFiltersAndSort() {
+            if (!rawData || !rawData.rankings) return;
+            let filtered = [...rawData.rankings];
+
+            if (activeRaceFilter) filtered = filtered.filter(p => p.Race?.trim() === activeRaceFilter.trim());
+            if (activePlayerFilter) filtered = filtered.filter(p => p.Name === activePlayerFilter);
+
+            const f = excelFilters.rankings;
+            if (f.Name) filtered = filtered.filter(p => p.Name?.toLowerCase().includes(f.Name.toLowerCase()));
+            if (f['Daily XP'] !== null) filtered = filtered.filter(p => (p['Daily XP'] || 0) >= f['Daily XP']);
+            ['Rank', 'Level', 'Race', 'Guild'].forEach(col => {
+                if (f[col]) {
+                    filtered = filtered.filter(p => {
+                        let v = p[col];
+                        if (v === undefined || v === null || v === '') v = '(Blank)';
+                        return f[col].has(String(v));
+                    });
+                }
+            });
+
+            document.getElementById('stat-players').innerText = filtered.length.toLocaleString();
+            const maxLvl = filtered.length > 0 ? Math.max(...filtered.map(p => p.Level || 0)) : 0;
+            document.getElementById('stat-max-level').innerText = maxLvl;
+            const sumXP = filtered.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
+            document.getElementById('stat-daily-xp').innerText = formatXP(sumXP);
+
+            filtered.sort((a, b) => {
+                let valA = a[currentSortColumn], valB = b[currentSortColumn];
+                if (valA === null || valA === undefined) valA = (typeof valB === 'number') ? 0 : "";
+                if (valB === null || valB === undefined) valB = (typeof valA === 'number') ? 0 : "";
+                if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
+                if (valA < valB) return currentSortAscending ? -1 : 1;
+                if (valA > valB) return currentSortAscending ? 1 : -1;
+                return 0;
+            });
+
+            updateSortHeaderIcons();
+            renderRankingsTable(filtered);
+        }
+
+        function sortTable(column) { if (currentSortColumn === column) currentSortAscending = !currentSortAscending; else { currentSortColumn = column; currentSortAscending = true; } applyFiltersAndSort(); }
+        function updateSortHeaderIcons() {
+            ['Rank', 'Name', 'Level', 'Race', 'Guild', 'Daily XP'].forEach(col => {
+                const el = document.getElementById(`sort-${col}`);
+                if (el) el.innerText = (col === currentSortColumn) ? (currentSortAscending ? '▲' : '▼') : '';
+            });
+        }
+
+        function renderRankingsTable(rankings) {
+            const tbody = document.getElementById('rankings-table-body'); tbody.innerHTML = '';
+            if (rankings.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">No players match the applied column filters.</td></tr>`;
+                return;
+            }
+            rankings.forEach(p => {
+                const tr = document.createElement('tr'); tr.className = "hover:bg-slate-700/30 transition";
+                const color = getRaceColor(p.Race);
+                const textColor = (color === '#eab308' || color === '#9ca3af') ? '#0f172a' : '#ffffff';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-amber-400">#${p.Rank}</td>
+                    <td class="py-3 px-4 font-medium text-white hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${p.Name}')">${p.Name}</td>
+                    <td class="py-3 px-4">${p.Level}</td>
+                    <td class="py-3 px-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-bold cursor-pointer hover:opacity-80 transition" style="background-color: ${color}; color: ${textColor};" onclick="openClassModal('${p.Race}')">${p.Race}</span></td>
+                    <td class="py-3 px-4 text-slate-400">${formatGuildCell(p.Guild)}</td>
+                    <td class="py-3 px-4 text-right font-mono text-cyan-400">+${formatXP(p['Daily XP'] || 0)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderChangesTab(changes, rankings) {
+            if (!changes || changes.length === 0) return;
+            const rankingsMap = {};
+            rankings.forEach(p => rankingsMap[p.Name] = p.Race);
+            const enrichedChanges = changes.map(c => ({ ...c, Race: c.Race || rankingsMap[c.Name] || 'Unknown' }));
+            rawData.enrichedChanges = enrichedChanges;
+            let maxRankDiff = 0, topRiser = null, maxLevelDiff = 0, topLeveler = null, transfers = 0;
+            enrichedChanges.forEach(c => {
+                const rMatch = (c['Rank Movement'] || '').match(/\d+/);
+                if (c['Rank Movement']?.includes('▲') && rMatch) {
+                    const d = parseInt(rMatch[0], 10);
+                    if (d > maxRankDiff) { maxRankDiff = d; topRiser = c; }
+                }
+                const lMatch = (c['Level Movement'] || '').match(/\d+/);
+                if (c['Level Movement']?.includes('▲') && lMatch) {
+                    const d = parseInt(lMatch[0], 10);
+                    if (d > maxLevelDiff) { maxLevelDiff = d; topLeveler = c; }
+                }
+                if (c.Guild_Previous && c.Guild && c.Guild_Previous !== c.Guild) transfers++;
+            });
+            document.getElementById('top-riser-name').innerText = topRiser ? topRiser.Name : "None";
+            document.getElementById('top-riser-val').innerText = topRiser ? `+${maxRankDiff} ranks climbed` : "0 ranks climbed";
+            document.getElementById('top-leveler-name').innerText = topLeveler ? topLeveler.Name : "None";
+            document.getElementById('top-leveler-val').innerText = topLeveler ? `+${maxLevelDiff} levels gained` : "0 levels gained";
+            document.getElementById('guild-transfers-count').innerText = transfers;
+            applyChangesFiltersAndSort();
+        }
+
+        function applyChangesFiltersAndSort() {
+            if (!rawData || !rawData.enrichedChanges) return;
+            let filtered = [...rawData.enrichedChanges];
+            
+            const rankToggle = document.getElementById('filter-rank-shift').checked;
+            const levelToggle = document.getElementById('filter-level-shift').checked;
+            const guildToggle = document.getElementById('filter-guild-shift').checked;
+
+            if (rankToggle) {
+                filtered = filtered.filter(c => {
+                    if (c.Rank_Previous !== undefined && c.Rank_Previous !== null && c.Rank !== undefined && c.Rank !== null) {
+                        if (Number(c.Rank_Previous) !== Number(c.Rank)) return true;
+                    }
+                    const rm = String(c['Rank Movement'] || '');
+                    return rm.includes('▲') || rm.includes('▼') || rm.includes('NEW') || (rm.trim() !== '' && !rm.includes('=') && rm.trim() !== '0');
+                });
+            }
+
+            if (levelToggle) {
+                filtered = filtered.filter(c => {
+                    if (c.Level_Previous !== undefined && c.Level_Previous !== null && c.Level !== undefined && c.Level !== null) {
+                        if (Number(c.Level) !== Number(c.Level_Previous)) return true;
+                    }
+                    const lm = String(c['Level Movement'] || '');
+                    return lm.includes('▲') || lm.includes('+') || (lm.trim() !== '' && !lm.includes('=') && lm.trim() !== '0');
+                });
+            }
+
+            if (guildToggle) filtered = filtered.filter(c => c.Guild_Previous && c.Guild_Previous !== c.Guild);
+
+            const f = excelFilters.changes;
+            if (f.Name) filtered = filtered.filter(c => c.Name?.toLowerCase().includes(f.Name.toLowerCase()));
+            if (f['Rank Movement']) filtered = filtered.filter(c => c['Rank Movement']?.toLowerCase().includes(f['Rank Movement'].toLowerCase()));
+            if (f['Level Movement']) filtered = filtered.filter(c => c['Level Movement']?.toLowerCase().includes(f['Level Movement'].toLowerCase()));
+
+            ['Rank', 'Race', 'Guild'].forEach(col => {
+                if (f[col]) {
+                    filtered = filtered.filter(c => {
+                        let v = c[col];
+                        if (v === undefined || v === null || v === '') v = '(Blank)';
+                        return f[col].has(String(v));
+                    });
+                }
+            });
+
+            filtered.sort((a, b) => {
+                let valA = a[changesSortColumn], valB = b[changesSortColumn];
+                if (changesSortColumn === 'Rank Movement' || changesSortColumn === 'Level Movement') {
+                    const getNum = (s) => {
+                        const m = String(s).match(/\d+/);
+                        const n = m ? parseInt(m[0], 10) : 0;
+                        if (String(s).includes('▲')) return n;
+                        if (String(s).includes('▼')) return -n;
+                        if (String(s).includes('NEW')) return 9999; 
+                        return 0;
+                    };
+                    return changesSortAscending ? getNum(valA) - getNum(valB) : getNum(valB) - getNum(valA);
+                }
+                if (valA === null || valA === undefined) valA = "";
+                if (valB === null || valB === undefined) valB = "";
+                if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
+                if (valA < valB) return changesSortAscending ? -1 : 1;
+                if (valA > valB) return changesSortAscending ? 1 : -1;
+                return 0;
+            });
+            updateChangesSortHeaderIcons();
+            renderChangesTable(filtered);
+        }
+
+        function clearActivityFilters() {
+            document.getElementById('filter-rank-shift').checked = false;
+            document.getElementById('filter-level-shift').checked = false;
+            document.getElementById('filter-guild-shift').checked = false;
+            applyChangesFiltersAndSort();
+        }
+
+        function sortChangesTable(col) { if (changesSortColumn === col) changesSortAscending = !changesSortAscending; else { changesSortColumn = col; changesSortAscending = (col === 'Rank' || col === 'Name'); } applyChangesFiltersAndSort(); }
+        function updateChangesSortHeaderIcons() {
+            ['Rank', 'Name', 'Race', 'Rank Movement', 'Level Movement', 'Guild'].forEach(col => {
+                const el = document.getElementById(`sort-changes-${col}`);
+                if (el) el.innerText = (col === changesSortColumn) ? (changesSortAscending ? '▲' : '▼') : '';
+            });
+        }
+
+        function renderChangesTable(changes) {
+            const tbody = document.getElementById('changes-table-body'); tbody.innerHTML = '';
+            if (changes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">No movement data matches the applied column filters.</td></tr>`;
+                return;
+            }
+            changes.forEach(c => {
+                const tr = document.createElement('tr'); tr.className = "hover:bg-slate-700/30 transition";
+                const rColor = getRaceColor(c.Race);
+                const tColor = (rColor === '#eab308' || rColor === '#9ca3af') ? '#0f172a' : '#ffffff';
+                let rBadge = `<span class="text-slate-400">${c['Rank Movement'] || '-'}</span>`;
+                if (c['Rank Movement']?.includes('▲')) rBadge = `<span class="bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded font-bold text-xs">${c['Rank Movement']}</span>`;
+                else if (c['Rank Movement']?.includes('▼')) rBadge = `<span class="bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded font-bold text-xs">${c['Rank Movement']}</span>`;
+                else if (c['Rank Movement']?.includes('NEW')) rBadge = `<span class="bg-amber-900/60 text-amber-300 px-2 py-0.5 rounded font-bold text-xs">★ NEW</span>`;
+                
+                let lBadge = `<span class="text-slate-400">${c['Level Movement'] || '-'}</span>`;
+                if (c['Level Movement']?.includes('▲')) lBadge = `<span class="bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded font-bold text-xs">${c['Level Movement']}</span>`;
+                else if (c['Level Movement']?.includes('▼')) lBadge = `<span class="bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded font-bold text-xs">${c['Level Movement']}</span>`;
+                else if (c['Level Movement']?.includes('NEW')) lBadge = `<span class="bg-amber-900/60 text-amber-300 px-2 py-0.5 rounded font-bold text-xs">★ NEW</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-amber-400">#${c.Rank}</td>
+                    <td class="py-3 px-4 font-medium text-white hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${c.Name}')">${c.Name}</td>
+                    <td class="py-3 px-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-bold cursor-pointer hover:opacity-80 transition" style="background-color: ${rColor}; color: ${tColor};" onclick="openClassModal('${c.Race}')">${c.Race}</span></td>
+                    <td class="py-3 px-4">${rBadge} <span class="text-[10px] text-slate-500 ml-1">(#${c.Rank_Previous ?? '-'} ➔ #${c.Rank})</span></td>
+                    <td class="py-3 px-4">${lBadge} <span class="text-[10px] text-slate-500 ml-1">(Lvl ${c.Level_Previous ?? '-'} ➔ Lvl ${c.Level})</span></td>
+                    <td class="py-3 px-4 text-slate-400">${formatGuildMovementCell(c.Guild_Previous, c.Guild)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderClassAnalytics(rankings) {
+            if (!rankings || rankings.length === 0) return;
+
+            const classMap = {};
+            rankings.forEach(p => {
+                const rName = p.Race ? p.Race.trim() : 'Unknown';
+                if (!classMap[rName]) {
+                    classMap[rName] = { Race: rName, TotalPlayers: 0, SumLevel: 0, TotalXP: 0, Players: [] };
+                }
+                const c = classMap[rName];
+                c.TotalPlayers += 1;
+                c.SumLevel += (p.Level || 0);
+                c.TotalXP += (p['Daily XP'] || 0);
+                c.Players.push(p);
+            });
+
+            const classes = Object.values(classMap);
+            classes.forEach(c => {
+                c.AvgLevel = c.TotalPlayers > 0 ? (c.SumLevel / c.TotalPlayers) : 0;
+                c.Players.sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
+            });
+
+            const ctx1 = document.getElementById('classAvgLevelChart').getContext('2d');
+            if (classAvgLevelChart) classAvgLevelChart.destroy();
+            classAvgLevelChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: classes.map(c => c.Race),
+                    datasets: [{ label: 'Average Level', data: classes.map(c => c.AvgLevel.toFixed(1)), backgroundColor: classes.map(c => getRaceColor(c.Race)), borderRadius: 6 }]
+                },
+                options: {
+                    ...commonChartOptions,
+                    scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51, 65, 85, 0.4)' } } },
+                    plugins: { ...commonChartOptions.plugins, legend: { display: false } },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const selectedRace = classes[activeElements[0].index].Race;
+                            openClassModal(selectedRace);
+                        }
+                    }
+                }
+            });
+
+            const ctx2 = document.getElementById('classXpShareChart').getContext('2d');
+            if (classXpShareChart) classXpShareChart.destroy();
+            classXpShareChart = new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: classes.map(c => c.Race),
+                    datasets: [{ data: classes.map(c => c.TotalXP), backgroundColor: classes.map(c => getRaceColor(c.Race)), borderWidth: 2, borderColor: '#1e293b' }]
+                },
+                options: { 
+                    ...commonChartOptions, 
+                    plugins: { ...commonChartOptions.plugins, legend: { position: 'bottom', labels: { color: '#cbd5e1', padding: 12, usePointStyle: true } } },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const selectedRace = classes[activeElements[0].index].Race;
+                            openClassModal(selectedRace);
+                        }
+                    }
+                }
+            });
+
+            const brackets = [
+                { label: 'Lvl < 250', min: 0, max: 249 },
+                { label: 'Lvl 250 - 300', min: 250, max: 300 },
+                { label: 'Lvl 301 - 340', min: 301, max: 340 },
+                { label: 'Lvl 341 - 400', min: 341, max: 400 },
+                { label: 'Lvl 400+', min: 401, max: 9999 }
+            ];
+
+            const distinctRaces = Array.from(new Set(rankings.map(p => p.Race ? p.Race.trim() : 'Unknown').filter(Boolean)));
+            const bracketTotals = brackets.map(() => 0);
+            const bracketCounts = brackets.map(() => ({}));
+
+            rankings.forEach(p => {
+                const lvl = p.Level || 0;
+                const race = p.Race ? p.Race.trim() : 'Unknown';
+                const bIdx = brackets.findIndex(b => lvl >= b.min && lvl <= b.max);
+                if (bIdx !== -1) {
+                    bracketTotals[bIdx]++;
+                    bracketCounts[bIdx][race] = (bracketCounts[bIdx][race] || 0) + 1;
+                }
+            });
+
+            const datasets = distinctRaces.map(raceName => {
+                const rColor = getRaceColor(raceName);
+                const rawCounts = brackets.map((b, bIdx) => bracketCounts[bIdx][raceName] || 0);
+                const pcts = brackets.map((b, bIdx) => {
+                    const total = bracketTotals[bIdx];
+                    return total > 0 ? parseFloat(((rawCounts[bIdx] / total) * 100).toFixed(1)) : 0;
+                });
+                return {
+                    label: raceName,
+                    data: pcts,
+                    rawCounts: rawCounts,
+                    backgroundColor: rColor,
+                    borderRadius: 3
+                };
+            });
+
+            const ctx3 = document.getElementById('classLevelBracketChart').getContext('2d');
+            if (classLevelBracketChart) classLevelBracketChart.destroy();
+            classLevelBracketChart = new Chart(ctx3, {
+                type: 'bar',
+                data: { labels: brackets.map(b => b.label), datasets: datasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, max: 100, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: 'rgba(51, 65, 85, 0.4)' } },
+                        y: { stacked: true, ticks: { color: '#cbd5e1', font: { weight: 'bold', size: 11 } }, grid: { display: false } }
+                    },
+                    plugins: {
+                        ...commonChartOptions.plugins,
+                        legend: { position: 'bottom', labels: { color: '#cbd5e1', padding: 12, usePointStyle: true } },
+                        tooltip: {
+                            ...commonChartOptions.plugins.tooltip,
+                            callbacks: {
+                                label: function(context) {
+                                    const raceName = context.dataset.label;
+                                    const pct = context.parsed.x || 0;
+                                    const rawCount = context.dataset.rawCounts ? context.dataset.rawCounts[context.dataIndex] : 0;
+                                    return ` ${raceName}: ${pct}% (${rawCount} players)`;
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const datasetIndex = activeElements[0].datasetIndex;
+                            const selectedRace = datasets[datasetIndex].label;
+                            openClassModal(selectedRace);
+                        }
+                    }
+                }
+            });
+
+            const championsGrid = document.getElementById('class-champions-grid');
+            championsGrid.innerHTML = '';
+
+            classes.forEach(c => {
+                const top3 = c.Players.slice(0, 3);
+                const raceColor = getRaceColor(c.Race);
+                const card = document.createElement('div');
+                card.className = "bg-slate-800/60 rounded-2xl border border-slate-700/50 p-5 shadow-md flex flex-col justify-between";
+
+                let top3HTML = '';
+                top3.forEach((p, idx) => {
+                    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                    top3HTML += `
+                        <div class="flex items-center justify-between py-2 border-b border-slate-700/30 last:border-none">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">${medal}</span>
+                                <div>
+                                    <div class="font-bold text-white text-sm hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${p.Name}')">${p.Name}</div>
+                                    <div class="text-[11px] text-slate-400">Rank #${p.Rank} • ${formatGuildCell(p.Guild)}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs font-bold text-amber-400">Lvl ${p.Level}</div>
+                                <div class="text-[10px] font-mono text-cyan-400">+${formatXP(p['Daily XP'] || 0)} XP</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between mb-3 border-b border-slate-700/50 pb-2 cursor-pointer hover:opacity-80 transition" onclick="openClassModal('${c.Race}')">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${raceColor}"></span>
+                                <h3 class="font-extrabold text-base text-white">${c.Race}</h3>
+                            </div>
+                            <span class="text-xs text-slate-400 font-medium">${c.TotalPlayers} characters (${c.AvgLevel.toFixed(1)} avg lvl)</span>
+                        </div>
+                        <div class="space-y-1">${top3HTML}</div>
+                    </div>
+                `;
+                championsGrid.appendChild(card);
+            });
+        }
+
+        function renderGuildAnalytics(rankings, xpHistory) {
+            const guildXP = {};
+            rankings.forEach(p => { if (p.Guild && p.Guild !== "-") guildXP[p.Guild] = (guildXP[p.Guild] || 0) + (p['Daily XP'] || 0); });
+            const topGuilds = Object.entries(guildXP).sort((a, b) => b[1] - a[1]).slice(0, 8);
+            const ctx1 = document.getElementById('guildXpChart').getContext('2d');
+            if (guildXpChart) guildXpChart.destroy();
+            guildXpChart = new Chart(ctx1, {
+                type: 'bar',
+                data: { labels: topGuilds.map(g => g[0]), datasets: [{ label: 'Daily XP', data: topGuilds.map(g => g[1]), backgroundColor: '#10b981', borderRadius: 6 }] },
+                options: { 
+                    ...commonChartOptions, 
+                    plugins: { ...commonChartOptions.plugins, legend: { display: false } },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const selectedGuild = topGuilds[activeElements[0].index][0];
+                            openGuildModal(selectedGuild);
+                        }
+                    }
+                }
+            });
+            const dailyTotals = {};
+            xpHistory.forEach(h => { dailyTotals[h.Date] = (dailyTotals[h.Date] || 0) + (h['Daily XP'] || 0); });
+            const sortedDates = Object.keys(dailyTotals).sort();
+            const ctx2 = document.getElementById('serverTrendChart').getContext('2d');
+            if (serverTrendChart) serverTrendChart.destroy();
+            serverTrendChart = new Chart(ctx2, {
+                type: 'line',
+                data: { labels: sortedDates, datasets: [{ label: 'Server XP', data: sortedDates.map(d => dailyTotals[d]), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.3 }] },
+                options: commonChartOptions
+            });
+
+            applyGuildTableFiltersAndSort();
+        }
+
+        function getGuildAggregates(rankings) {
+            const map = {};
+            (rankings || []).forEach(p => {
+                const rawG = p.Guild ? String(p.Guild).trim() : '';
+                const gName = (rawG !== '' && rawG !== '-') ? rawG : '(No Guild)';
+                if (!map[gName]) {
+                    map[gName] = { Guild: gName, Members: 0, SumLevel: 0, Highest_Level: 0, Total_Daily_XP: 0, Total_Avg_7Day_XP: 0 };
+                }
+                const g = map[gName];
+                const lvl = Number(p.Level) || 0;
+                const dailyXP = Number(p['Daily XP']) || 0;
+                const avgXP = Number(p['Average Daily XP'] || p['Average Daily XP '] || p['7-Day Avg XP'] || 0);
+
+                g.Members += 1;
+                g.SumLevel += lvl;
+                if (lvl > g.Highest_Level) g.Highest_Level = lvl;
+                g.Total_Daily_XP += dailyXP;
+                g.Total_Avg_7Day_XP += avgXP;
+            });
+
+            return Object.values(map).map(g => ({ ...g, Average_Level: g.Members > 0 ? (g.SumLevel / g.Members) : 0 }));
+        }
+
+        function applyGuildTableFiltersAndSort() {
+            if (!rawData || !rawData.rankings) return;
+            const aggregates = getGuildAggregates(rawData.rankings);
+            const f = excelFilters.guilds;
+
+            let filtered = aggregates;
+            if (f.Guild) filtered = filtered.filter(g => f.Guild.has(String(g.Guild)));
+            if (f.Members !== null) filtered = filtered.filter(g => g.Members >= f.Members);
+            if (f.Average_Level !== null) filtered = filtered.filter(g => g.Average_Level >= f.Average_Level);
+            if (f.Highest_Level !== null) filtered = filtered.filter(g => g.Highest_Level >= f.Highest_Level);
+            if (f.Total_Daily_XP !== null) filtered = filtered.filter(g => g.Total_Daily_XP >= f.Total_Daily_XP);
+            if (f.Total_Avg_7Day_XP !== null) filtered = filtered.filter(g => g.Total_Avg_7Day_XP >= f.Total_Avg_7Day_XP);
+
+            filtered.sort((a, b) => {
+                let valA = a[guildSortColumn], valB = b[guildSortColumn];
+                if (valA === null || valA === undefined) valA = (typeof valB === 'number') ? 0 : '';
+                if (valB === null || valB === undefined) valB = (typeof valA === 'number') ? 0 : '';
+                if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
+                if (valA < valB) return guildSortAscending ? -1 : 1;
+                if (valA > valB) return guildSortAscending ? 1 : -1;
+                return 0;
+            });
+
+            updateGuildSortHeaderIcons();
+            renderGuildsTable(filtered);
+        }
+
+        function sortGuildTable(col) {
+            if (guildSortColumn === col) guildSortAscending = !guildSortAscending;
+            else { guildSortColumn = col; guildSortAscending = (col === 'Guild'); }
+            applyGuildTableFiltersAndSort();
+        }
+
+        function updateGuildSortHeaderIcons() {
+            ['Guild', 'Members', 'Average_Level', 'Highest_Level', 'Total_Daily_XP', 'Total_Avg_7Day_XP'].forEach(col => {
+                const el = document.getElementById(`sort-guild-${col}`);
+                if (el) el.innerText = (col === guildSortColumn) ? (guildSortAscending ? '▲' : '▼') : '';
+            });
+        }
+
+        function renderGuildsTable(guilds) {
+            const tbody = document.getElementById('guilds-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (guilds.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">No guilds match the applied column filters.</td></tr>`;
+                return;
+            }
+
+            guilds.forEach(g => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30 transition";
+                const isNoGuild = g.Guild === '(No Guild)';
+                const guildNameCell = isNoGuild ? '<span class="text-slate-400 italic font-medium">(No Guild)</span>' : `<span class="font-bold text-amber-400 hover:underline cursor-pointer" onclick="openGuildModal('${g.Guild}')">${g.Guild}</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4">${guildNameCell}</td>
+                    <td class="py-3 px-4 text-right font-medium text-white">${g.Members.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-right font-mono text-slate-300">${g.Average_Level.toFixed(1)}</td>
+                    <td class="py-3 px-4 text-right font-bold text-amber-400">${g.Highest_Level}</td>
+                    <td class="py-3 px-4 text-right font-mono text-cyan-400">+${formatXP(g.Total_Daily_XP)}</td>
+                    <td class="py-3 px-4 text-right font-mono text-emerald-400">${formatXP(g.Total_Avg_7Day_XP)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
