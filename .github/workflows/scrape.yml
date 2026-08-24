@@ -32,17 +32,20 @@ jobs:
           pip install pandas openpyxl playwright
           playwright install chromium --with-deps
 
-      - name: Run Laghaim Scraper Script
+      - name: Run Character Rankings Scraper
         run: python laghaim_rankings.py
+
+      - name: Run Pet Rankings Scraper
+        run: python laghaim_pet_rankings.py
 
       - name: Commit and Push Updated Data
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/data.json
+          git add output/data.json output/pet_data.json
           if git diff --staged --quiet; then
-            echo "No changes in data.json to commit."
+            echo "No changes in ranking files to commit."
           else
-            git commit -m "auto: update ranking snapshot and daily XP data [skip ci]"
+            git commit -m "auto: update character and pet rankings snapshot [skip ci]"
             git push
           fi

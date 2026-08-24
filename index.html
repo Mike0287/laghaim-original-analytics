@@ -47,7 +47,7 @@
         <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/60 shadow-xl">
             <div>
                 <h1 class="text-3xl font-extrabold text-amber-400 tracking-tight">Laghaim Analytics</h1>
-                <p class="text-slate-400 text-sm mt-1 font-medium" id="last-updated">Status: Checking server for data.json...</p>
+                <p class="text-slate-400 text-sm mt-1 font-medium" id="last-updated">Status: Checking server for data...</p>
             </div>
             <div class="mt-4 md:mt-0 flex items-center gap-4">
                 <label for="json-input" class="cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-amber-500/20 active:scale-95">
@@ -57,22 +57,23 @@
             </div>
         </header>
 
-        <!-- Drop Zone Prompt (Shown when auto-load isn't available) -->
+        <!-- Drop Zone Prompt -->
         <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-2xl p-12 text-center transition-all bg-slate-800/30">
-            <p class="text-slate-300 font-medium">Attempting to load <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">data.json</code> automatically...</p>
-            <p class="text-xs text-slate-500 mt-2">Or drag & drop a local <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">data.json</code> file here</p>
+            <p class="text-slate-300 font-medium">Attempting to load data automatically from <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">output/</code>...</p>
+            <p class="text-xs text-slate-500 mt-2">Or drag & drop your <code class="bg-slate-800 px-2.5 py-1 rounded-md text-amber-400 border border-slate-700">data.json</code> file here</p>
         </div>
 
         <!-- Main Dashboard Container -->
         <main id="dashboard" class="hidden space-y-6">
             <div class="flex border-b border-slate-800 space-x-6 overflow-x-auto">
-                <button onclick="switchTab('rankings-tab')" id="btn-rankings-tab" class="tab-btn py-3 px-2 font-bold text-amber-400 border-b-2 border-amber-400 focus:outline-none transition whitespace-nowrap">Rankings & XP</button>
+                <button onclick="switchTab('rankings-tab')" id="btn-rankings-tab" class="tab-btn py-3 px-2 font-bold text-amber-400 border-b-2 border-amber-400 focus:outline-none transition whitespace-nowrap">Player Rankings</button>
                 <button onclick="switchTab('changes-tab')" id="btn-changes-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Rank & Guild Movement</button>
                 <button onclick="switchTab('class-tab')" id="btn-class-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Class Statistics</button>
                 <button onclick="switchTab('guilds-tab')" id="btn-guilds-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Guild Statistics</button>
+                <button onclick="switchTab('pets-tab')" id="btn-pets-tab" class="tab-btn py-3 px-2 font-bold text-slate-400 hover:text-slate-200 border-b-2 border-transparent focus:outline-none transition whitespace-nowrap">Pet Rankings</button>
             </div>
 
-            <!-- TAB 1: RANKINGS & XP -->
+            <!-- TAB 1: PLAYER RANKINGS -->
             <div id="rankings-tab" class="tab-content space-y-6">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
@@ -392,7 +393,6 @@
                     </div>
                 </div>
 
-                <!-- 100% STACKED BAR CHART: CLASS LEVEL BRACKET BREAKDOWN -->
                 <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
                     <div class="flex justify-between items-center mb-4">
                         <div>
@@ -409,7 +409,6 @@
                         <h2 class="text-lg font-bold text-amber-400">Class Champions (Top 3 Players Per Race)</h2>
                         <span class="text-xs text-slate-400">Click card title or name for details</span>
                     </div>
-                    
                     <div id="class-champions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                 </div>
             </div>
@@ -539,12 +538,164 @@
                     </div>
                 </div>
             </div>
+
+            <!-- TAB 5: PET RANKINGS (NEW) -->
+            <div id="pets-tab" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Total Tracked Pets</span>
+                        <div class="text-3xl font-extrabold text-white mt-1" id="stat-pets-total">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Max Level (200)</span>
+                        <div class="text-3xl font-extrabold text-amber-400 mt-1" id="stat-pets-max">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Leveled Up Today</span>
+                        <div class="text-3xl font-extrabold text-emerald-400 mt-1" id="stat-pets-leveled">0</div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-sm">
+                        <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Top Pet Type</span>
+                        <div class="text-xl font-black text-cyan-400 mt-2 truncate" id="stat-pets-top-type">-</div>
+                    </div>
+                </div>
+
+                <div id="active-pet-filter-banner" class="hidden bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-xl flex justify-between items-center text-sm">
+                    <span class="font-medium">Active Pet Filters Applied (<span id="active-pet-filter-count">0</span> columns)</span>
+                    <button onclick="clearAllPetFilters()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs transition shadow-sm">Reset All Filters ✕</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <h2 class="text-base font-bold text-slate-200 mb-2">Pet Types Distribution</h2>
+                        <div class="chart-container"><canvas id="petTypeChart"></canvas></div>
+                    </div>
+                    <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 shadow-md">
+                        <h2 class="text-base font-bold text-slate-200 mb-2">Top 10 Pets by Experience</h2>
+                        <div class="chart-container"><canvas id="petExpChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/60 rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden">
+                    <div class="p-5 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-200">Server Pet Rankings</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Click any Pet Name or Owner to view the character profile</p>
+                        </div>
+                        <button onclick="clearAllPetFilters()" class="text-xs font-bold text-slate-400 hover:text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg transition">Clear All Column Filters</button>
+                    </div>
+                    <div class="overflow-auto max-h-[600px] relative">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="sticky top-0 z-20 bg-slate-900 uppercase text-xs font-bold text-slate-400 border-b border-slate-700/50 tracking-wider shadow-md">
+                                <tr>
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortPetTable('rank')" class="sort-header flex-1">Rank <span id="sort-pets-rank">▲</span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'rank', event)" id="filter-btn-pets-rank" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Rank">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-rank" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Filter Rank</div>
+                                            <input type="text" id="excel-search-pets-rank" placeholder="Search Rank..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('pets', 'rank')">
+                                            <div id="excel-list-pets-rank" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'rank')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'rank')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortPetTable('name')" class="sort-header flex-1">Pet Name <span id="sort-pets-name"></span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'name', event)" id="filter-btn-pets-name" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Pet Name">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-name" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Pet Name</div>
+                                            <input type="text" id="excel-search-pets-name" placeholder="Type pet name..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'name')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'name')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortPetTable('owner')" class="sort-header flex-1">Owner <span id="sort-pets-owner"></span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'owner', event)" id="filter-btn-pets-owner" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Owner">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-owner" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Search Owner</div>
+                                            <input type="text" id="excel-search-pets-owner" placeholder="Type owner name..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'owner')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'owner')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortPetTable('type')" class="sort-header flex-1">Type <span id="sort-pets-type"></span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'type', event)" id="filter-btn-pets-type" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Type">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-type" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 flex justify-between items-center">
+                                                <span>Filter Pet Type</span>
+                                                <button onclick="toggleSelectAllExcel('pets', 'type')" class="text-[10px] text-amber-400 hover:underline">Select/Deselect All</button>
+                                            </div>
+                                            <input type="text" id="excel-search-pets-type" placeholder="Search pet type..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('pets', 'type')">
+                                            <div id="excel-list-pets-type" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'type')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'type')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 relative">
+                                        <div class="flex items-center gap-1.5">
+                                            <span onclick="sortPetTable('level')" class="sort-header flex-1">Level <span id="sort-pets-level"></span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'level', event)" id="filter-btn-pets-level" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter Level">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-level" class="excel-filter-popover" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Filter Level</div>
+                                            <input type="text" id="excel-search-pets-level" placeholder="Search level..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500" onkeyup="renderExcelFilterList('pets', 'level')">
+                                            <div id="excel-list-pets-level" class="max-h-40 overflow-y-auto space-y-1 my-2 text-xs"></div>
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'level')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'level')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+
+                                    <th class="py-3.5 px-4 text-right relative">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <span onclick="sortPetTable('exp')" class="sort-header">Experience <span id="sort-pets-exp"></span></span>
+                                            <button onclick="toggleExcelFilter('pets', 'exp', event)" id="filter-btn-pets-exp" class="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition" title="Filter EXP">🔻</button>
+                                        </div>
+                                        <div id="popover-pets-exp" class="excel-filter-popover popover-right" onclick="event.stopPropagation()">
+                                            <div class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1 text-left">Min Experience</div>
+                                            <input type="number" id="excel-search-pets-exp" placeholder="Min EXP value..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200 mb-2 focus:outline-none focus:border-amber-500">
+                                            <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-[11px]">
+                                                <button onclick="resetExcelFilter('pets', 'exp')" class="text-slate-400 hover:text-slate-200">Clear</button>
+                                                <button onclick="applyExcelFilter('pets', 'exp')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded">Apply</button>
+                                            </div>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="pets-table-body" class="divide-y divide-slate-700/30"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
-    <!-- CHARACTER SUMMARY MODAL -->
+    <!-- CHARACTER SUMMARY MODAL (UPDATED WITH PET DATA) -->
     <div id="character-modal" class="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeAllModals()">
-        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 text-slate-100 relative" onclick="event.stopPropagation()">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 text-slate-100 relative max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
             <div class="flex items-start justify-between border-b border-slate-800 pb-4">
                 <div>
                     <div class="flex items-center gap-2 flex-wrap">
@@ -561,7 +712,12 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <!-- Unranked Character Notice -->
+            <div id="modal-char-unranked-banner" class="hidden bg-slate-800/80 border border-slate-700 p-3 rounded-xl text-xs text-slate-300">
+                ⚠️ <span class="text-amber-400 font-semibold">Note:</span> This character is not currently listed in the top player rankings (Level &lt; 250 or unranked).
+            </div>
+
+            <div class="grid grid-cols-2 gap-3" id="modal-char-stats-grid">
                 <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
                     <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Current Level</span>
                     <div id="modal-char-level" class="text-xl font-black text-white mt-0.5">0</div>
@@ -577,6 +733,17 @@
                 <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
                     <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Snapshot Movement</span>
                     <div id="modal-char-movement" class="text-xs font-bold text-slate-200 mt-1">No Shift</div>
+                </div>
+            </div>
+
+            <!-- PET CARD INTEGRATION -->
+            <div class="bg-slate-800/40 rounded-xl p-4 border border-slate-800 space-y-2">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-xs uppercase font-bold text-amber-400 tracking-wider">🐾 Character Pet</span>
+                    <span id="modal-char-pet-status" class="text-[10px] font-bold text-slate-400">None</span>
+                </div>
+                <div id="modal-char-pet-info" class="text-xs space-y-1.5">
+                    <div class="text-slate-400 italic">No pet currently registered for this character.</div>
                 </div>
             </div>
 
@@ -755,8 +922,10 @@
 
     <script>
         let rawData = null;
+        let rawPetData = null;
         let raceChart = null, xpChart = null, guildXpChart = null, serverTrendChart = null;
         let classAvgLevelChart = null, classXpShareChart = null, classLevelBracketChart = null;
+        let petTypeChart = null, petExpChart = null;
 
         let activeRaceFilter = null;
         let activePlayerFilter = null;
@@ -770,9 +939,10 @@
         let guildSortColumn = 'Total_Daily_XP';
         let guildSortAscending = false;
 
-        let activeModalGuildMembers = [];
+        let petSortColumn = 'rank';
+        let petSortAscending = true;
 
-        // Global Navigation Stack to handle multi-level modal browsing cleanly
+        let activeModalGuildMembers = [];
         let modalStack = [];
         let baseZIndex = 60;
 
@@ -789,7 +959,8 @@
         const excelFilters = {
             rankings: { Rank: null, Name: "", Level: null, Race: null, Guild: null, 'Daily XP': null },
             changes: { Rank: null, Name: "", Race: null, 'Rank Movement': "", 'Level Movement': "", Guild: null },
-            guilds: { Guild: null, Members: null, Average_Level: null, Highest_Level: null, Total_Daily_XP: null, Total_Avg_7Day_XP: null }
+            guilds: { Guild: null, Members: null, Average_Level: null, Highest_Level: null, Total_Daily_XP: null, Total_Avg_7Day_XP: null },
+            pets: { rank: null, name: "", owner: "", type: null, level: null, exp: null }
         };
 
         function getRaceColor(raceName) {
@@ -813,25 +984,29 @@
             }
         };
 
-        // AUTO-FETCH DATA ON PAGE LOAD (Attempts output/data.json first, then fallback to data.json)
+        // AUTO-FETCH PLAYER AND PET DATA ON PAGE LOAD
         window.addEventListener('DOMContentLoaded', () => {
-            fetch('output/data.json')
-                .then(response => {
-                    if (!response.ok) return fetch('data.json');
-                    return response;
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error('data.json not found on web server');
-                    return response.json();
-                })
-                .then(data => {
-                    rawData = data;
+            const fetchPlayer = fetch('output/data.json')
+                .then(r => r.ok ? r.json() : fetch('data.json').then(r => r.json()))
+                .catch(() => null);
+
+            const fetchPets = fetch('output/pet_data.json')
+                .then(r => r.ok ? r.json() : fetch('pet_data.json').then(r => r.json()))
+                .catch(() => null);
+
+            Promise.all([fetchPlayer, fetchPets]).then(([playerData, petData]) => {
+                if (playerData) {
+                    rawData = playerData;
                     renderDashboard(rawData);
-                })
-                .catch(err => {
-                    console.log("Auto-fetch fallback: ", err.message);
-                    document.getElementById('last-updated').innerText = "Status: Waiting for data.json file...";
-                });
+                }
+                if (petData) {
+                    rawPetData = petData;
+                    renderPetAnalytics(rawPetData);
+                }
+                if (!playerData && !petData) {
+                    document.getElementById('last-updated').innerText = "Status: Waiting for data files...";
+                }
+            });
         });
 
         document.getElementById('json-input').addEventListener('change', (e) => { if (e.target.files[0]) readJSONFile(e.target.files[0]); });
@@ -842,16 +1017,25 @@
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    rawData = JSON.parse(e.target.result);
-                    renderDashboard(rawData);
-                } catch (err) { alert("Error parsing data.json: " + err.message); }
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.pets) {
+                        rawPetData = parsed;
+                        renderPetAnalytics(rawPetData);
+                        switchTab('pets-tab');
+                    } else {
+                        rawData = parsed;
+                        renderDashboard(rawData);
+                    }
+                } catch (err) { alert("Error parsing JSON file: " + err.message); }
             };
             reader.readAsText(file);
         }
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.getElementById(tabId).classList.remove('hidden');
+            const activeContent = document.getElementById(tabId);
+            if (activeContent) activeContent.classList.remove('hidden');
+            
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('text-amber-400', 'border-amber-400');
                 btn.classList.add('text-slate-400', 'border-transparent');
@@ -880,6 +1064,181 @@
             renderGuildAnalytics(rankings, xpHistory);
         }
 
+        // --- PET ANALYTICS & TAB RENDERING ---
+        function getPetsList() {
+            if (!rawPetData) return [];
+            if (Array.isArray(rawPetData.pets)) return rawPetData.pets;
+            if (typeof rawPetData.pets === 'object') return Object.values(rawPetData.pets);
+            return [];
+        }
+
+        function renderPetAnalytics(petDataPayload) {
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            const pets = getPetsList();
+            document.getElementById('stat-pets-total').innerText = pets.length.toLocaleString();
+            const maxLvl = pets.filter(p => (Number(p.level) || 0) >= 200).length;
+            document.getElementById('stat-pets-max').innerText = maxLvl.toLocaleString();
+            const leveled = pets.filter(p => (Number(p.level_gain_today) || 0) > 0).length;
+            document.getElementById('stat-pets-leveled').innerText = leveled.toLocaleString();
+
+            const typeCounts = {};
+            pets.forEach(p => {
+                const t = p.type || 'Unknown';
+                typeCounts[t] = (typeCounts[t] || 0) + 1;
+            });
+            const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+            document.getElementById('stat-pets-top-type').innerText = sortedTypes[0] ? `${sortedTypes[0][0]} (${sortedTypes[0][1]})` : '-';
+
+            renderPetCharts(pets, sortedTypes);
+            applyPetTableFiltersAndSort();
+        }
+
+        function renderPetCharts(pets, sortedTypes) {
+            // Type Breakdown Chart
+            const ctx1 = document.getElementById('petTypeChart').getContext('2d');
+            if (petTypeChart) petTypeChart.destroy();
+            
+            const palette = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#a855f7', '#ec4899', '#6366f1', '#14b8a6'];
+            petTypeChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: sortedTypes.map(t => t[0]),
+                    datasets: [{
+                        data: sortedTypes.map(t => t[1]),
+                        backgroundColor: sortedTypes.map((t, idx) => palette[idx % palette.length]),
+                        borderWidth: 2,
+                        borderColor: '#1e293b'
+                    }]
+                },
+                options: { ...commonChartOptions, cutout: '65%' }
+            });
+
+            // Top 10 Pets by EXP
+            const top10Exp = [...pets].sort((a, b) => (Number(b.exp) || 0) - (Number(a.exp) || 0)).slice(0, 10);
+            const ctx2 = document.getElementById('petExpChart').getContext('2d');
+            if (petExpChart) petExpChart.destroy();
+            petExpChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: top10Exp.map(p => `${p.name} (${p.owner})`),
+                    datasets: [{
+                        label: 'Experience',
+                        data: top10Exp.map(p => p.exp),
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    ...commonChartOptions,
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51, 65, 85, 0.4)' } }
+                    },
+                    plugins: { ...commonChartOptions.plugins, legend: { display: false } },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const p = top10Exp[activeElements[0].index];
+                            if (p && p.owner) openCharacterModal(p.owner);
+                        }
+                    }
+                }
+            });
+        }
+
+        function applyPetTableFiltersAndSort() {
+            const pets = getPetsList();
+            if (pets.length === 0) return;
+
+            const f = excelFilters.pets;
+            let filtered = [...pets];
+
+            if (f.name) filtered = filtered.filter(p => p.name?.toLowerCase().includes(f.name.toLowerCase()));
+            if (f.owner) filtered = filtered.filter(p => p.owner?.toLowerCase().includes(f.owner.toLowerCase()));
+            if (f.exp !== null) filtered = filtered.filter(p => (Number(p.exp) || 0) >= f.exp);
+            
+            ['rank', 'type', 'level'].forEach(col => {
+                if (f[col]) {
+                    filtered = filtered.filter(p => {
+                        let v = p[col];
+                        if (v === undefined || v === null || v === '') v = '(Blank)';
+                        return f[col].has(String(v));
+                    });
+                }
+            });
+
+            filtered.sort((a, b) => {
+                let valA = a[petSortColumn], valB = b[petSortColumn];
+                if (valA === null || valA === undefined) valA = (typeof valB === 'number') ? 0 : '';
+                if (valB === null || valB === undefined) valB = (typeof valA === 'number') ? 0 : '';
+                if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
+                if (valA < valB) return petSortAscending ? -1 : 1;
+                if (valA > valB) return petSortAscending ? 1 : -1;
+                return 0;
+            });
+
+            updatePetSortHeaderIcons();
+            renderPetsTable(filtered);
+        }
+
+        function sortPetTable(col) {
+            if (petSortColumn === col) petSortAscending = !petSortAscending;
+            else { petSortColumn = col; petSortAscending = (col === 'rank' || col === 'name' || col === 'owner'); }
+            applyPetTableFiltersAndSort();
+        }
+
+        function updatePetSortHeaderIcons() {
+            ['rank', 'name', 'owner', 'type', 'level', 'exp'].forEach(col => {
+                const el = document.getElementById(`sort-pets-${col}`);
+                if (el) el.innerText = (col === petSortColumn) ? (petSortAscending ? '▲' : '▼') : '';
+            });
+        }
+
+        function clearAllPetFilters() {
+            Object.keys(excelFilters.pets).forEach(col => {
+                excelFilters.pets[col] = null;
+                const searchInput = document.getElementById(`excel-search-pets-${col}`);
+                if (searchInput) searchInput.value = '';
+            });
+            updateFilterButtonStates();
+            applyPetTableFiltersAndSort();
+        }
+
+        function renderPetsTable(pets) {
+            const tbody = document.getElementById('pets-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (pets.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">No pets match the applied filters.</td></tr>`;
+                return;
+            }
+
+            pets.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30 transition";
+
+                let rBadge = '';
+                if (p.rank_change_today > 0) rBadge = `<span class="text-[10px] text-emerald-400 font-bold ml-1">▲${p.rank_change_today}</span>`;
+                else if (p.rank_change_today < 0) rBadge = `<span class="text-[10px] text-rose-400 font-bold ml-1">▼${Math.abs(p.rank_change_today)}</span>`;
+
+                let lBadge = '';
+                if (p.level_gain_today > 0) lBadge = `<span class="bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold ml-1">+${p.level_gain_today} lvl</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-amber-400">#${p.rank} ${rBadge}</td>
+                    <td class="py-3 px-4 font-bold text-white hover:text-amber-400 cursor-pointer transition" onclick="openCharacterModal('${p.owner}')">${p.name}</td>
+                    <td class="py-3 px-4 text-amber-400 font-medium hover:underline cursor-pointer" onclick="openCharacterModal('${p.owner}')">${p.owner || '-'}</td>
+                    <td class="py-3 px-4"><span class="bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs font-semibold">${p.type || '-'}</span></td>
+                    <td class="py-3 px-4 font-bold text-slate-200">${p.level} ${lBadge}</td>
+                    <td class="py-3 px-4 text-right font-mono text-cyan-400 font-semibold">${Number(p.exp || 0).toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- MODAL STACK & NAVIGATION ---
         function pushModalState(type, id) {
             if (modalStack.length > 0) {
                 const top = modalStack[modalStack.length - 1];
@@ -901,13 +1260,9 @@
             document.getElementById('guild-modal').classList.add('hidden');
             document.getElementById('class-modal').classList.add('hidden');
 
-            if (previous.type === 'character') {
-                renderCharacterModalContent(previous.id);
-            } else if (previous.type === 'guild') {
-                renderGuildModalContent(previous.id);
-            } else if (previous.type === 'class') {
-                renderClassModalContent(previous.id);
-            }
+            if (previous.type === 'character') renderCharacterModalContent(previous.id);
+            else if (previous.type === 'guild') renderGuildModalContent(previous.id);
+            else if (previous.type === 'class') renderClassModalContent(previous.id);
             updateModalStackUI();
         }
 
@@ -941,7 +1296,7 @@
         }
 
         function openCharacterModal(playerName) {
-            if (!rawData || !rawData.rankings || !playerName) return;
+            if (!playerName || playerName === '-') return;
             document.getElementById('guild-modal').classList.add('hidden');
             document.getElementById('class-modal').classList.add('hidden');
             pushModalState('character', playerName);
@@ -949,78 +1304,124 @@
         }
 
         function renderCharacterModalContent(playerName) {
-            const player = rawData.rankings.find(p => p.Name === playerName);
-            if (!player) return;
-
+            const player = (rawData && rawData.rankings) ? rawData.rankings.find(p => p.Name.toLowerCase() === playerName.toLowerCase()) : null;
             const charModal = document.getElementById('character-modal');
             charModal.style.zIndex = baseZIndex + modalStack.length * 10;
 
-            document.getElementById('modal-char-name').innerText = player.Name;
-            const raceColor = getRaceColor(player.Race);
-            const textColor = (raceColor === '#eab308' || raceColor === '#9ca3af') ? '#0f172a' : '#ffffff';
-            const raceEl = document.getElementById('modal-char-race');
-            raceEl.innerText = player.Race || 'Unknown';
-            raceEl.style.backgroundColor = raceColor;
-            raceEl.style.color = textColor;
-            raceEl.onclick = () => openClassModal(player.Race);
+            const unrankedBanner = document.getElementById('modal-char-unranked-banner');
 
-            document.getElementById('modal-char-rank').innerText = `#${player.Rank || '-'}`;
-            const pGuild = player.Guild && player.Guild !== '-' ? player.Guild : null;
-            document.getElementById('modal-char-guild').innerHTML = pGuild 
-                ? `Guild: <span class="text-amber-400 font-bold hover:underline cursor-pointer" onclick="openGuildModal('${pGuild}')">${pGuild}</span>`
-                : `Guild: <span class="text-slate-400 font-semibold">No Guild</span>`;
+            // Locate any registered pet belonging to this player
+            const allPets = getPetsList();
+            const ownedPet = allPets.find(p => p.owner && p.owner.toLowerCase() === playerName.toLowerCase());
 
-            document.getElementById('modal-char-level').innerText = `Lvl ${player.Level || '-'}`;
-            document.getElementById('modal-char-daily-xp').innerText = `+${formatXP(player['Daily XP'] || 0)} XP`;
-            const avgXP = player['Average Daily XP'] || player['Average Daily XP '] || player['7-Day Avg XP'] || 0;
-            document.getElementById('modal-char-avg-xp').innerText = `${formatXP(avgXP)} XP`;
+            if (player) {
+                unrankedBanner.classList.add('hidden');
+                document.getElementById('modal-char-name').innerText = player.Name;
+                const raceColor = getRaceColor(player.Race);
+                const textColor = (raceColor === '#eab308' || raceColor === '#9ca3af') ? '#0f172a' : '#ffffff';
+                const raceEl = document.getElementById('modal-char-race');
+                raceEl.classList.remove('hidden');
+                raceEl.innerText = player.Race || 'Unknown';
+                raceEl.style.backgroundColor = raceColor;
+                raceEl.style.color = textColor;
+                raceEl.onclick = () => openClassModal(player.Race);
 
-            const changeRecord = (rawData.enrichedChanges || rawData.changes || []).find(c => c.Name === playerName);
-            let movementHTML = '<span class="text-slate-400 font-normal">No shift recorded</span>';
-            if (changeRecord) {
-                const rShift = changeRecord['Rank Movement'] || '=';
-                const lShift = changeRecord['Level Movement'] || '=';
-                
-                const formatShift = (shiftStr, label) => {
-                    let colorClass = 'text-slate-300';
-                    if (shiftStr.includes('▲')) colorClass = 'text-emerald-400';
-                    else if (shiftStr.includes('▼')) colorClass = 'text-rose-400';
-                    else if (shiftStr.includes('NEW')) colorClass = 'text-amber-400';
-                    return `<div><span class="text-slate-400 font-normal">${label}:</span> <span class="${colorClass}">${shiftStr}</span></div>`;
-                };
+                const rankEl = document.getElementById('modal-char-rank');
+                rankEl.innerText = `#${player.Rank || '-'}`;
+                rankEl.classList.remove('hidden');
 
-                movementHTML = `
-                    <div class="space-y-0.5 mt-0.5 font-bold">
-                        ${formatShift(rShift, 'Rank')}
-                        ${formatShift(lShift, 'Lvl')}
+                const pGuild = player.Guild && player.Guild !== '-' ? player.Guild : null;
+                document.getElementById('modal-char-guild').innerHTML = pGuild 
+                    ? `Guild: <span class="text-amber-400 font-bold hover:underline cursor-pointer" onclick="openGuildModal('${pGuild}')">${pGuild}</span>`
+                    : `Guild: <span class="text-slate-400 font-semibold">No Guild</span>`;
+
+                document.getElementById('modal-char-level').innerText = `Lvl ${player.Level || '-'}`;
+                document.getElementById('modal-char-daily-xp').innerText = `+${formatXP(player['Daily XP'] || 0)} XP`;
+                const avgXP = player['Average Daily XP'] || player['Average Daily XP '] || player['7-Day Avg XP'] || 0;
+                document.getElementById('modal-char-avg-xp').innerText = `${formatXP(avgXP)} XP`;
+
+                const changeRecord = (rawData.enrichedChanges || rawData.changes || []).find(c => c.Name === player.Name);
+                let movementHTML = '<span class="text-slate-400 font-normal">No shift recorded</span>';
+                if (changeRecord) {
+                    const rShift = changeRecord['Rank Movement'] || '=';
+                    const lShift = changeRecord['Level Movement'] || '=';
+                    const formatShift = (shiftStr, label) => {
+                        let colorClass = 'text-slate-300';
+                        if (shiftStr.includes('▲')) colorClass = 'text-emerald-400';
+                        else if (shiftStr.includes('▼')) colorClass = 'text-rose-400';
+                        else if (shiftStr.includes('NEW')) colorClass = 'text-amber-400';
+                        return `<div><span class="text-slate-400 font-normal">${label}:</span> <span class="${colorClass}">${shiftStr}</span></div>`;
+                    };
+                    movementHTML = `<div class="space-y-0.5 mt-0.5 font-bold">${formatShift(rShift, 'Rank')}${formatShift(lShift, 'Lvl')}</div>`;
+                }
+                document.getElementById('modal-char-movement').innerHTML = movementHTML;
+
+                const sameRace = rawData.rankings.filter(p => p.Race?.trim() === player.Race?.trim()).sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
+                const raceRank = sameRace.findIndex(p => p.Name === player.Name) + 1;
+                document.getElementById('modal-char-race-standing').innerHTML = raceRank > 0 
+                    ? `#${raceRank} <span class="hover:underline cursor-pointer" onclick="openClassModal('${player.Race}')">${player.Race}</span> on Server` 
+                    : "N/A";
+
+                if (changeRecord && changeRecord.Guild_Previous && changeRecord.Guild_Previous !== changeRecord.Guild) {
+                    const prevH = (changeRecord.Guild_Previous !== '-') ? `<span class="hover:underline cursor-pointer text-slate-300" onclick="openGuildModal('${changeRecord.Guild_Previous}')">${changeRecord.Guild_Previous}</span>` : '-';
+                    const nextH = (changeRecord.Guild !== '-') ? `<span class="hover:underline cursor-pointer text-amber-400 font-bold" onclick="openGuildModal('${changeRecord.Guild}')">${changeRecord.Guild}</span>` : '-';
+                    document.getElementById('modal-char-guild-transition').innerHTML = `${prevH} ➔ ${nextH}`;
+                } else {
+                    document.getElementById('modal-char-guild-transition').innerText = "No recent transfer";
+                }
+
+                if (player.Guild && player.Guild !== '-') {
+                    const guildMembers = rawData.rankings.filter(p => p.Guild === player.Guild);
+                    const totalGuildXP = guildMembers.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
+                    const share = totalGuildXP > 0 ? (((player['Daily XP'] || 0) / totalGuildXP) * 100).toFixed(1) : 0;
+                    document.getElementById('modal-char-guild-share').innerHTML = `${share}% of <span class="hover:underline cursor-pointer" onclick="openGuildModal('${player.Guild}')">${player.Guild}</span> XP`;
+                } else {
+                    document.getElementById('modal-char-guild-share').innerText = "N/A (No Guild)";
+                }
+            } else {
+                // Fallback for unranked characters (clicked from Pet Rankings)
+                unrankedBanner.classList.remove('hidden');
+                document.getElementById('modal-char-name').innerText = playerName;
+                document.getElementById('modal-char-race').classList.add('hidden');
+                document.getElementById('modal-char-rank').classList.add('hidden');
+                document.getElementById('modal-char-guild').innerHTML = `Guild: <span class="text-slate-500 italic">Unranked</span>`;
+                document.getElementById('modal-char-level').innerText = 'Unranked';
+                document.getElementById('modal-char-daily-xp').innerText = '-';
+                document.getElementById('modal-char-avg-xp').innerText = '-';
+                document.getElementById('modal-char-movement').innerHTML = '<span class="text-slate-500 font-normal">Unranked</span>';
+                document.getElementById('modal-char-race-standing').innerText = 'Unranked';
+                document.getElementById('modal-char-guild-transition').innerText = 'N/A';
+                document.getElementById('modal-char-guild-share').innerText = 'N/A';
+            }
+
+            // Populate Pet Info inside modal
+            const petStatusEl = document.getElementById('modal-char-pet-status');
+            const petInfoEl = document.getElementById('modal-char-pet-info');
+            if (ownedPet) {
+                petStatusEl.innerText = `Rank #${ownedPet.rank}`;
+                petStatusEl.className = "text-xs font-bold text-amber-400";
+                petInfoEl.innerHTML = `
+                    <div class="flex items-center justify-between py-1 border-b border-slate-800/60">
+                        <span class="text-slate-400">Pet Name</span>
+                        <span class="font-bold text-white">${ownedPet.name}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-slate-800/60">
+                        <span class="text-slate-400">Species / Type</span>
+                        <span class="bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded text-[11px] font-semibold">${ownedPet.type}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-slate-800/60">
+                        <span class="text-slate-400">Pet Level</span>
+                        <span class="font-bold text-amber-400">Lvl ${ownedPet.level}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1">
+                        <span class="text-slate-400">Total Pet Experience</span>
+                        <span class="font-mono font-bold text-cyan-400">${Number(ownedPet.exp || 0).toLocaleString()} XP</span>
                     </div>
                 `;
-            }
-            document.getElementById('modal-char-movement').innerHTML = movementHTML;
-
-            const sameRace = rawData.rankings
-                .filter(p => p.Race?.trim() === player.Race?.trim())
-                .sort((a, b) => (a.Rank || 9999) - (b.Rank || 9999));
-            const raceRank = sameRace.findIndex(p => p.Name === player.Name) + 1;
-            document.getElementById('modal-char-race-standing').innerHTML = raceRank > 0 
-                ? `#${raceRank} <span class="hover:underline cursor-pointer" onclick="openClassModal('${player.Race}')">${player.Race}</span> on Server` 
-                : "N/A";
-
-            if (changeRecord && changeRecord.Guild_Previous && changeRecord.Guild_Previous !== changeRecord.Guild) {
-                const prevH = (changeRecord.Guild_Previous !== '-') ? `<span class="hover:underline cursor-pointer text-slate-300" onclick="openGuildModal('${changeRecord.Guild_Previous}')">${changeRecord.Guild_Previous}</span>` : '-';
-                const nextH = (changeRecord.Guild !== '-') ? `<span class="hover:underline cursor-pointer text-amber-400 font-bold" onclick="openGuildModal('${changeRecord.Guild}')">${changeRecord.Guild}</span>` : '-';
-                document.getElementById('modal-char-guild-transition').innerHTML = `${prevH} ➔ ${nextH}`;
             } else {
-                document.getElementById('modal-char-guild-transition').innerText = "No recent transfer";
-            }
-
-            if (player.Guild && player.Guild !== '-') {
-                const guildMembers = rawData.rankings.filter(p => p.Guild === player.Guild);
-                const totalGuildXP = guildMembers.reduce((acc, p) => acc + (p['Daily XP'] || 0), 0);
-                const share = totalGuildXP > 0 ? (((player['Daily XP'] || 0) / totalGuildXP) * 100).toFixed(1) : 0;
-                document.getElementById('modal-char-guild-share').innerHTML = `${share}% of <span class="hover:underline cursor-pointer" onclick="openGuildModal('${player.Guild}')">${player.Guild}</span> XP`;
-            } else {
-                document.getElementById('modal-char-guild-share').innerText = "N/A (No Guild)";
+                petStatusEl.innerText = 'No Pet';
+                petStatusEl.className = 'text-[10px] font-bold text-slate-500';
+                petInfoEl.innerHTML = `<div class="text-slate-500 italic py-1">No ranked pet registered for this character.</div>`;
             }
 
             charModal.classList.remove('hidden');
@@ -1028,9 +1429,7 @@
 
         function openCharacterModalFromElement(elemId) {
             const el = document.getElementById(elemId);
-            if (el && el.innerText && el.innerText !== '-') {
-                openCharacterModal(el.innerText);
-            }
+            if (el && el.innerText && el.innerText !== '-') openCharacterModal(el.innerText);
         }
 
         function openGuildModal(guildName) {
@@ -1264,10 +1663,7 @@
                 guildCounts[g] = (guildCounts[g] || 0) + 1;
             });
 
-            const topGuildsForClass = Object.entries(guildCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 4);
-
+            const topGuildsForClass = Object.entries(guildCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
             const guildListContainer = document.getElementById('modal-class-guild-list');
             guildListContainer.innerHTML = '';
             topGuildsForClass.forEach(([gName, count]) => {
@@ -1326,6 +1722,7 @@
             return formatGuildCell(nextGuild);
         }
 
+        // --- EXCEL-STYLE FILTER ENGINE ---
         function toggleExcelFilter(tab, col, event) {
             event.stopPropagation();
             const popover = document.getElementById(`popover-${tab}-${col}`);
@@ -1342,11 +1739,11 @@
         }
 
         function getUniqueColumnValues(tab, col) {
-            if (!rawData) return [];
             let sourceData = [];
-            if (tab === 'rankings') sourceData = rawData.rankings || [];
-            else if (tab === 'changes') sourceData = rawData.enrichedChanges || rawData.changes || [];
-            else if (tab === 'guilds') sourceData = getGuildAggregates(rawData.rankings || []);
+            if (tab === 'rankings') sourceData = (rawData && rawData.rankings) ? rawData.rankings : [];
+            else if (tab === 'changes') sourceData = (rawData && (rawData.enrichedChanges || rawData.changes)) ? (rawData.enrichedChanges || rawData.changes) : [];
+            else if (tab === 'guilds') sourceData = (rawData && rawData.rankings) ? getGuildAggregates(rawData.rankings) : [];
+            else if (tab === 'pets') sourceData = getPetsList();
 
             const set = new Set();
             sourceData.forEach(item => {
@@ -1393,9 +1790,9 @@
         function applyExcelFilter(tab, col) {
             const input = document.getElementById(`excel-search-${tab}-${col}`);
             
-            if (col === 'Name' || col === 'Rank Movement' || col === 'Level Movement') {
+            if (['Name', 'owner', 'Rank Movement', 'Level Movement'].includes(col) || (tab === 'pets' && col === 'name')) {
                 excelFilters[tab][col] = input ? input.value.trim() : "";
-            } else if (['Daily XP', 'Members', 'Average_Level', 'Highest_Level', 'Total_Daily_XP', 'Total_Avg_7Day_XP'].includes(col)) {
+            } else if (['Daily XP', 'Members', 'Average_Level', 'Highest_Level', 'Total_Daily_XP', 'Total_Avg_7Day_XP', 'exp'].includes(col)) {
                 const val = input ? parseFloat(input.value) : NaN;
                 excelFilters[tab][col] = isNaN(val) ? null : val;
             } else {
@@ -1414,6 +1811,7 @@
             if (tab === 'rankings') applyFiltersAndSort();
             else if (tab === 'changes') applyChangesFiltersAndSort();
             else if (tab === 'guilds') applyGuildTableFiltersAndSort();
+            else if (tab === 'pets') applyPetTableFiltersAndSort();
         }
 
         function resetExcelFilter(tab, col) {
@@ -1426,6 +1824,7 @@
             if (tab === 'rankings') applyFiltersAndSort();
             else if (tab === 'changes') applyChangesFiltersAndSort();
             else if (tab === 'guilds') applyGuildTableFiltersAndSort();
+            else if (tab === 'pets') applyPetTableFiltersAndSort();
         }
 
         function clearAllRankingsFilters() {
@@ -1461,7 +1860,7 @@
         }
 
         function updateFilterButtonStates() {
-            ['rankings', 'changes', 'guilds'].forEach(tab => {
+            ['rankings', 'changes', 'guilds', 'pets'].forEach(tab => {
                 let activeCount = 0;
                 Object.keys(excelFilters[tab]).forEach(col => {
                     const btn = document.getElementById(`filter-btn-${tab}-${col}`);
@@ -1477,12 +1876,22 @@
                         }
                     }
                 });
+
                 if (tab === 'rankings') {
                     const banner = document.getElementById('active-filter-banner');
                     const countEl = document.getElementById('active-filter-count');
                     if (activeCount > 0 || activeRaceFilter || activePlayerFilter) {
                         if (banner) banner.classList.remove('hidden');
                         if (countEl) countEl.innerText = activeCount + (activeRaceFilter || activePlayerFilter ? 1 : 0);
+                    } else {
+                        if (banner) banner.classList.add('hidden');
+                    }
+                } else if (tab === 'pets') {
+                    const banner = document.getElementById('active-pet-filter-banner');
+                    const countEl = document.getElementById('active-pet-filter-count');
+                    if (activeCount > 0) {
+                        if (banner) banner.classList.remove('hidden');
+                        if (countEl) countEl.innerText = activeCount;
                     } else {
                         if (banner) banner.classList.add('hidden');
                     }
@@ -1752,9 +2161,7 @@
             const classMap = {};
             rankings.forEach(p => {
                 const rName = p.Race ? p.Race.trim() : 'Unknown';
-                if (!classMap[rName]) {
-                    classMap[rName] = { Race: rName, TotalPlayers: 0, SumLevel: 0, TotalXP: 0, Players: [] };
-                }
+                if (!classMap[rName]) classMap[rName] = { Race: rName, TotalPlayers: 0, SumLevel: 0, TotalXP: 0, Players: [] };
                 const c = classMap[rName];
                 c.TotalPlayers += 1;
                 c.SumLevel += (p.Level || 0);
@@ -1887,7 +2294,6 @@
 
             const championsGrid = document.getElementById('class-champions-grid');
             championsGrid.innerHTML = '';
-
             classes.forEach(c => {
                 const top3 = c.Players.slice(0, 3);
                 const raceColor = getRaceColor(c.Race);
@@ -1983,7 +2389,6 @@
                 g.Total_Daily_XP += dailyXP;
                 g.Total_Avg_7Day_XP += avgXP;
             });
-
             return Object.values(map).map(g => ({ ...g, Average_Level: g.Members > 0 ? (g.SumLevel / g.Members) : 0 }));
         }
 
